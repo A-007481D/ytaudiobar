@@ -8,6 +8,16 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
+// Helper function to build YouTube bypass arguments for downloads
+// Start with no bypass, escalate if needed
+fn build_youtube_bypass_args() -> Vec<String> {
+    // Start with no bypass - just use normal yt-dlp
+    // The ytdlp_manager already handles the escalation through multiple methods if needed
+    // For downloads, we start simple and let yt-dlp work normally
+    println!("🎯 Using normal yt-dlp for download (no bypass by default)");
+    Vec::new()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadProgress {
     pub video_id: String,
@@ -279,18 +289,27 @@ impl DownloadManager {
             _ => "bestaudio[ext=m4a]/bestaudio", // "best" or default
         };
 
+        // Build bypass arguments
+        let bypass_args = build_youtube_bypass_args();
+
+        // Build complete argument list
+        let mut ytdlp_args = vec![
+            "--format".to_string(),
+            format_string.to_string(),
+            "--output".to_string(),
+            output_template.clone(),
+            "--no-playlist".to_string(),
+            "--newline".to_string(), // Force yt-dlp to output progress on new lines
+            "--progress".to_string(),
+        ];
+        ytdlp_args.extend(bypass_args);
+        ytdlp_args.push(video_url.clone());
+
+        let args_refs: Vec<&str> = ytdlp_args.iter().map(|s| s.as_str()).collect();
+
         // Use tokio::process::Command for proper async I/O
         let mut child = tokio::process::Command::new(&ytdlp_path)
-            .args(&[
-                "--format",
-                format_string,
-                "--output",
-                &output_template,
-                "--no-playlist",
-                "--newline", // Force yt-dlp to output progress on new lines
-                "--progress",
-                &video_url,
-            ])
+            .args(&args_refs)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()

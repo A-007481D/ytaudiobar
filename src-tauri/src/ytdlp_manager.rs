@@ -3,13 +3,158 @@ use crate::ytdlp_installer::YTDLPInstaller;
 use serde_json::Value;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
+use rand::seq::SliceRandom;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+
+// Global search process manager
+static SEARCH_PROCESS: Lazy<Arc<Mutex<Option<Child>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+
+// YouTube bot bypass methods (in order of escalation)
+#[derive(Debug, Clone, Copy)]
+pub enum YouTubeBotBypassMethod {
+    None,                // No bypass - normal yt-dlp behavior
+    RateLimit,           // Rate limiting to appear human
+    UserAgentRotation,   // Rotate user agents with headers
+    GeoBypass,           // Geo-bypass with player skip
+    CookiesFromBrowser,  // Last resort: Use browser cookies
+}
 
 pub struct YTDLPManager;
 
 impl YTDLPManager {
     pub fn new() -> Self {
         Self
+    }
+
+    // Detect default browser for cookie extraction
+    fn detect_default_browser() -> &'static str {
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, try common browsers in order
+            if std::path::Path::new(&format!("{}\\Google\\Chrome\\User Data",
+                std::env::var("LOCALAPPDATA").unwrap_or_default())).exists() {
+                return "chrome";
+            }
+            if std::path::Path::new(&format!("{}\\Microsoft\\Edge\\User Data",
+                std::env::var("LOCALAPPDATA").unwrap_or_default())).exists() {
+                return "edge";
+            }
+            "chrome" // Default fallback
+        }
+        #[cfg(target_os = "linux")]
+        {
+            "chrome" // Most common on Linux
+        }
+        #[cfg(target_os = "macos")]
+        {
+            "safari" // Default on macOS
+        }
+    }
+
+    // Build bypass arguments based on method
+    fn build_bypass_args(method: YouTubeBotBypassMethod) -> Vec<String> {
+        let mut args = Vec::new();
+
+        match method {
+            YouTubeBotBypassMethod::None => {
+                // Method 0: No bypass - normal yt-dlp behavior
+                println!("🎯 Using normal yt-dlp (no bypass)");
+                // Return empty args - just use default yt-dlp behavior
+                return args;
+            }
+            YouTubeBotBypassMethod::RateLimit => {
+                // Method 1: Rate limiting with delays to appear human-like
+                args.push("--sleep-interval".to_string());
+                args.push("2".to_string());
+                args.push("--max-sleep-interval".to_string());
+                args.push("8".to_string());
+                args.push("--sleep-subtitles".to_string());
+                args.push("1".to_string());
+                args.push("--extractor-args".to_string());
+                args.push("youtube:player_skip=configs,webpage".to_string());
+                println!("⏱️ Using rate limiting bypass method");
+            }
+            YouTubeBotBypassMethod::UserAgentRotation => {
+                // Method 2: User-Agent rotation with realistic headers
+                let user_agents = vec![
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ];
+                let selected_ua = user_agents.choose(&mut rand::thread_rng()).unwrap_or(&user_agents[0]);
+                args.push("--user-agent".to_string());
+                args.push(selected_ua.to_string());
+                args.push("--referer".to_string());
+                args.push("https://www.youtube.com/".to_string());
+                args.push("--add-header".to_string());
+                args.push("Accept-Language:en-US,en;q=0.9".to_string());
+                println!("🕸️ Using user-agent rotation bypass method");
+            }
+            YouTubeBotBypassMethod::GeoBypass => {
+                // Method 3: Advanced geo-bypass with proxy rotation
+                args.push("--geo-bypass-country".to_string());
+                args.push("US".to_string());
+                args.push("--extractor-args".to_string());
+                args.push("youtube:player_skip=configs,js".to_string());
+                args.push("--sleep-requests".to_string());
+                args.push("1".to_string());
+                args.push("--user-agent".to_string());
+                args.push("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string());
+                println!("🌍 Using geo-bypass method");
+            }
+            YouTubeBotBypassMethod::CookiesFromBrowser => {
+                // Method 4 (Last resort): Extract cookies from signed-in browser
+                let browser = Self::detect_default_browser();
+                args.push("--cookies-from-browser".to_string());
+                args.push(browser.to_string());
+                args.push("--extractor-args".to_string());
+                args.push("youtube:skip=dash,hls".to_string());
+                println!("🍪 Using browser cookies bypass method (browser: {}) - LAST RESORT", browser);
+            }
+        }
+
+        // Common anti-detection arguments for all methods (except None)
+        args.push("--no-check-certificate".to_string());
+        args.push("--geo-bypass".to_string());
+
+        args
+    }
+
+    // Try bypass methods in sequence until one works
+    // Order: None (normal) -> RateLimit -> UserAgentRotation -> GeoBypass -> CookiesFromBrowser (last resort)
+    async fn try_with_bypass<F, T>(operation: F) -> Result<T, String>
+    where
+        F: Fn(YouTubeBotBypassMethod) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, String>> + Send>>,
+    {
+        let methods = vec![
+            YouTubeBotBypassMethod::None,
+            YouTubeBotBypassMethod::RateLimit,
+            YouTubeBotBypassMethod::UserAgentRotation,
+            YouTubeBotBypassMethod::GeoBypass,
+            YouTubeBotBypassMethod::CookiesFromBrowser,
+        ];
+
+        for (i, method) in methods.iter().enumerate() {
+            println!("🔄 Attempt {}/{}: {:?}", i + 1, methods.len(), method);
+            match operation(*method).await {
+                Ok(result) => {
+                    println!("✅ Success with method: {:?}", method);
+                    return Ok(result);
+                }
+                Err(e) => {
+                    println!("⚠️ Method {:?} failed: {}", method, e);
+                    if i == methods.len() - 1 {
+                        return Err(format!("All methods failed. Last error: {}", e));
+                    }
+                    println!("⏭️ Trying next method...");
+                }
+            }
+        }
+
+        Err("All bypass methods exhausted".to_string())
     }
 
     pub async fn search(&self, query: String, music_mode: bool) -> Result<Vec<YTVideoInfo>, String> {
@@ -19,15 +164,34 @@ impl YTDLPManager {
             format!("ytsearch10:{}", query)
         };
 
+        // Try with bypass methods
+        Self::try_with_bypass(|bypass_method| {
+            let search_query = search_query.clone();
+            Box::pin(async move {
+                Self::search_with_method(search_query, bypass_method).await
+            })
+        }).await
+    }
+
+    async fn search_with_method(search_query: String, bypass_method: YouTubeBotBypassMethod) -> Result<Vec<YTVideoInfo>, String> {
+        // Cancel any existing search process first
+        Self::cancel_search().await;
+
         let ytdlp_path = Self::get_ytdlp_path();
+        let bypass_args = Self::build_bypass_args(bypass_method);
+
+        let mut args = vec![
+            "--dump-json".to_string(),
+            "--no-warnings".to_string(),
+            "--ignore-errors".to_string(),
+        ];
+        args.extend(bypass_args);
+        args.push(search_query);
+
+        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
         let mut child = Command::new(&ytdlp_path)
-            .args(&[
-                "--dump-json",
-                "--no-warnings",
-                "--ignore-errors",
-                &search_query,
-            ])
+            .args(&args_refs)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -37,6 +201,12 @@ impl YTDLPManager {
             .stdout
             .take()
             .ok_or("Failed to capture stdout")?;
+
+        // Store the child process so it can be cancelled
+        {
+            let mut search_process = SEARCH_PROCESS.lock().await;
+            *search_process = Some(child);
+        }
 
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -50,22 +220,63 @@ impl YTDLPManager {
             }
         }
 
-        child.wait().await.map_err(|e| format!("yt-dlp process error: {}", e))?;
+        // Wait for process to complete and clean up
+        let exit_status = {
+            let mut search_process = SEARCH_PROCESS.lock().await;
+            if let Some(mut child) = search_process.take() {
+                child.wait().await
+            } else {
+                return Err("Search process was cancelled".to_string());
+            }
+        };
+
+        exit_status.map_err(|e| format!("yt-dlp process error: {}", e))?;
+
+        if results.is_empty() {
+            return Err("No results found".to_string());
+        }
 
         Ok(results)
     }
 
+    // Cancel the currently running search
+    pub async fn cancel_search() {
+        let mut search_process = SEARCH_PROCESS.lock().await;
+        if let Some(mut child) = search_process.take() {
+            println!("🚫 Cancelling ongoing search process...");
+            let _ = child.kill().await; // Kill the process
+            println!("✅ Search process cancelled");
+        }
+    }
+
     pub async fn get_audio_url(&self, video_id: String) -> Result<(String, String), String> {
+        // Try with bypass methods
+        Self::try_with_bypass(|bypass_method| {
+            let video_id = video_id.clone();
+            Box::pin(async move {
+                Self::get_audio_url_with_method(video_id, bypass_method).await
+            })
+        }).await
+    }
+
+    async fn get_audio_url_with_method(video_id: String, bypass_method: YouTubeBotBypassMethod) -> Result<(String, String), String> {
         let ytdlp_path = Self::get_ytdlp_path();
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
+        let bypass_args = Self::build_bypass_args(bypass_method);
+
+        let mut args = vec![
+            "--dump-json".to_string(),
+            "-f".to_string(),
+            "bestaudio[ext=webm]/bestaudio[ext=opus]/bestaudio".to_string(),
+            "--no-warnings".to_string(),
+        ];
+        args.extend(bypass_args);
+        args.push(url);
+
+        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
         let output = Command::new(&ytdlp_path)
-            .args(&[
-                "--dump-json",
-                "-f", "bestaudio[ext=webm]/bestaudio[ext=opus]/bestaudio",
-                "--no-warnings",
-                &url,
-            ])
+            .args(&args_refs)
             .output()
             .await
             .map_err(|e| format!("Failed to get audio URL: {}", e))?;

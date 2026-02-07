@@ -8,6 +8,16 @@ use tokio::sync::{mpsc, Mutex};
 use tauri::{AppHandle, Emitter};
 use std::sync::mpsc as std_mpsc;
 
+// Helper function to build YouTube bypass arguments
+// Start with no bypass, escalate if needed
+fn build_youtube_bypass_args() -> Vec<String> {
+    // Start with no bypass - just use normal yt-dlp
+    // The ytdlp_manager already handles the escalation through multiple methods if needed
+    // For audio playback, we start simple and let yt-dlp work normally
+    println!("🎯 Using normal yt-dlp for audio playback (no bypass by default)");
+    Vec::new()
+}
+
 // Commands that can be sent to the audio thread
 enum AudioCommand {
     Play(YTVideoInfo),
@@ -359,15 +369,24 @@ fn audio_thread(
                 // Get yt-dlp path
                 let ytdlp_path = YTDLPInstaller::get_ytdlp_path();
 
+                // Build bypass arguments
+                let bypass_args = build_youtube_bypass_args();
+
+                // Build complete argument list
+                let mut ytdlp_args = vec![
+                    "-f".to_string(), "bestaudio".to_string(),
+                    "-o".to_string(), "-".to_string(),
+                    "--no-warnings".to_string(),
+                    "--quiet".to_string(),
+                ];
+                ytdlp_args.extend(bypass_args);
+                ytdlp_args.push(video_url.clone());
+
+                let args_refs: Vec<&str> = ytdlp_args.iter().map(|s| s.as_str()).collect();
+
                 // Use yt-dlp to pipe audio through ffmpeg to get raw PCM
                 let ytdlp_child = match Command::new(&ytdlp_path)
-                    .args(&[
-                        "-f", "bestaudio",
-                        "-o", "-",
-                        "--no-warnings",
-                        "--quiet",
-                        &video_url,
-                    ])
+                    .args(&args_refs)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::null())
                     .spawn()

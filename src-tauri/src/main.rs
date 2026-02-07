@@ -45,6 +45,12 @@ async fn search_youtube(
 }
 
 #[tauri::command]
+async fn cancel_search() -> Result<(), String> {
+    YTDLPManager::cancel_search().await;
+    Ok(())
+}
+
+#[tauri::command]
 async fn check_ytdlp_installed() -> Result<bool, String> {
     Ok(YTDLPInstaller::is_installed().await)
 }
@@ -656,6 +662,7 @@ async fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             search_youtube,
+            cancel_search,
             check_ytdlp_installed,
             install_ytdlp,
             get_ytdlp_version,

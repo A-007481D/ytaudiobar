@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AppHeader } from '@/components/app-header'
 import { MiniPlayer } from '@/features/player/mini-player'
 import { ExpandedPlayer } from '@/features/player/expanded-player'
@@ -13,6 +13,7 @@ import {
     installYtdlp,
     listenToPlaybackState,
     searchYoutube,
+    cancelSearch,
     togglePlayPause,
     playNext as playNextTrack,
     playPrevious as playPreviousTrack,
@@ -50,6 +51,7 @@ export function HomePage() {
     const [searchResults, setSearchResults] = useState<YTVideoInfo[]>([])
     const [isSearching, setIsSearching] = useState(false)
     const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+    const searchRequestIdRef = useRef(0) // Track current search request to cancel stale requests
 
     // Initialize YTDLP
     useEffect(() => {
@@ -187,24 +189,49 @@ export function HomePage() {
 
             return () => clearTimeout(timeout)
         } else {
+            // Clear results and cancel any pending searches when query is empty
+            cancelSearch().catch(console.error)
+            searchRequestIdRef.current += 1
             setSearchResults([])
+            setIsSearching(false)
         }
     }, [searchQuery, isMusicMode])
 
     const performSearch = async (query: string) => {
         if (!query.trim()) return
 
+        // Cancel any ongoing search on the backend
+        await cancelSearch().catch(console.error)
+
+        // Increment request ID to invalidate previous searches
+        searchRequestIdRef.current += 1
+        const currentRequestId = searchRequestIdRef.current
+
+        console.log(`🔍 Starting search request #${currentRequestId} for: "${query}"`)
+
         setIsSearching(true)
         // Auto-switch to search tab when user starts searching
         setActiveTab('search')
         try {
             const results = await searchYoutube(query, isMusicMode)
-            setSearchResults(results)
+
+            // Only use results if this is still the current request
+            if (searchRequestIdRef.current === currentRequestId) {
+                console.log(`✅ Search request #${currentRequestId} completed with ${results.length} results`)
+                setSearchResults(results)
+                setIsSearching(false)
+            } else {
+                console.log(`🚫 Ignoring stale search request #${currentRequestId} (current: #${searchRequestIdRef.current})`)
+            }
         } catch (error) {
-            console.error('Search failed:', error)
-            setSearchResults([])
-        } finally {
-            setIsSearching(false)
+            // Only handle error if this is still the current request
+            if (searchRequestIdRef.current === currentRequestId) {
+                console.error('Search failed:', error)
+                setSearchResults([])
+                setIsSearching(false)
+            } else {
+                console.log(`🚫 Ignoring error from stale search request #${currentRequestId}`)
+            }
         }
     }
 
