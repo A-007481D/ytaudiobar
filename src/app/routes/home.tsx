@@ -97,7 +97,8 @@ export function HomePage() {
             updateMediaMetadata(
                 audioState.current_track.title,
                 audioState.current_track.uploader,
-                audioState.duration
+                audioState.duration,
+                audioState.current_track.thumbnail_url || null
             ).catch(console.error)
 
             updateMediaPlaybackState(

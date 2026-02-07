@@ -1,7 +1,7 @@
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 pub struct MediaKeyManager {
     controls: Arc<Mutex<Option<MediaControls>>>,
@@ -19,11 +19,38 @@ impl MediaKeyManager {
     pub async fn initialize(&self, app_handle: AppHandle) -> Result<(), String> {
         *self.app_handle.lock().await = Some(app_handle.clone());
 
-        // Configure platform settings (hwnd is required in struct but only used on Windows)
+        // Get window handle for Windows platform
+        #[cfg(target_os = "windows")]
+        let hwnd = {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let handle_result: Result<raw_window_handle::WindowHandle, raw_window_handle::HandleError> = window.window_handle();
+                match handle_result {
+                    Ok(handle) => {
+                        let raw: RawWindowHandle = handle.as_raw();
+                        match raw {
+                            RawWindowHandle::Win32(win32_handle) => {
+                                Some(win32_handle.hwnd.get() as *mut std::ffi::c_void)
+                            }
+                            _ => None
+                        }
+                    }
+                    Err(_) => None
+                }
+            } else {
+                None
+            }
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let hwnd = None;
+
+        // Configure platform settings
         let platform_config = PlatformConfig {
             display_name: "YTAudioBar",
             dbus_name: "ytaudiobar",
-            hwnd: None,
+            hwnd,
         };
 
         // Create media controls
@@ -39,7 +66,8 @@ impl MediaKeyManager {
         let app_handle_clone = app_handle.clone();
         if let Err(e) = controls.attach(move |event| {
             let app_handle = app_handle_clone.clone();
-            tokio::spawn(async move {
+            // Use Tauri's async runtime instead of tokio::spawn
+            tauri::async_runtime::spawn(async move {
                 handle_media_event(event, app_handle).await;
             });
         }) {
@@ -53,14 +81,14 @@ impl MediaKeyManager {
         Ok(())
     }
 
-    pub async fn update_metadata(&self, title: String, artist: String, duration: f64) {
+    pub async fn update_metadata(&self, title: String, artist: String, duration: f64, cover_url: Option<String>) {
         if let Some(controls) = self.controls.lock().await.as_mut() {
             let metadata = MediaMetadata {
                 title: Some(&title),
                 artist: Some(&artist),
                 album: Some("YouTube"),
                 duration: Some(std::time::Duration::from_secs_f64(duration)),
-                cover_url: None,
+                cover_url: cover_url.as_deref(),
             };
 
             if let Err(e) = controls.set_metadata(metadata) {

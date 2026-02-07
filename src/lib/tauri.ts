@@ -135,8 +135,8 @@ export const getAppVersion = () =>
     invoke<string>('get_app_version')
 
 // Media Keys
-export const updateMediaMetadata = (title: string, artist: string, duration: number) =>
-    invoke<void>('update_media_metadata', { title, artist, duration })
+export const updateMediaMetadata = (title: string, artist: string, duration: number, coverUrl: string | null = null) =>
+    invoke<void>('update_media_metadata', { title, artist, duration, cover_url: coverUrl })
 export const updateMediaPlaybackState = (isPlaying: boolean, position: number, duration: number) =>
     invoke<void>('update_media_playback_state', { isPlaying, position, duration })
 export const clearMediaInfo = () =>

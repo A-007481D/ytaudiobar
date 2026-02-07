@@ -106,7 +106,13 @@ async fn set_playback_speed(rate: f32, state: State<'_, AppState>) -> Result<(),
 #[tauri::command]
 async fn play_next(state: State<'_, AppState>) -> Result<Option<YTVideoInfo>, String> {
     if let Some(track) = state.queue.play_next().await {
-        state.audio.play(track.clone()).await?;
+        // Check if track is downloaded and use local file if available
+        if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
+            println!("🎵 Playing next from local file: {}", file_path);
+            state.audio.play_from_file(track.clone(), file_path).await?;
+        } else {
+            state.audio.play(track.clone()).await?;
+        }
         Ok(Some(track))
     } else {
         Ok(None)
@@ -116,7 +122,13 @@ async fn play_next(state: State<'_, AppState>) -> Result<Option<YTVideoInfo>, St
 #[tauri::command]
 async fn play_previous(state: State<'_, AppState>) -> Result<Option<YTVideoInfo>, String> {
     if let Some(track) = state.queue.play_previous().await {
-        state.audio.play(track.clone()).await?;
+        // Check if track is downloaded and use local file if available
+        if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
+            println!("🎵 Playing previous from local file: {}", file_path);
+            state.audio.play_from_file(track.clone(), file_path).await?;
+        } else {
+            state.audio.play(track.clone()).await?;
+        }
         Ok(Some(track))
     } else {
         Ok(None)
@@ -304,7 +316,13 @@ async fn play_playlist(playlist_id: String, state: State<'_, AppState>) -> Resul
 
     // Play first track
     if let Some(first_track) = video_tracks.first() {
-        state.audio.play(first_track.clone()).await?;
+        // Check if track is downloaded and use local file if available
+        if let Some(file_path) = state.downloads.get_downloaded_file_path(&first_track.id).await {
+            println!("🎵 Playing playlist first track from local file: {}", file_path);
+            state.audio.play_from_file(first_track.clone(), file_path).await?;
+        } else {
+            state.audio.play(first_track.clone()).await?;
+        }
     }
 
     Ok(())
@@ -389,9 +407,10 @@ async fn update_media_metadata(
     title: String,
     artist: String,
     duration: f64,
+    cover_url: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state.media_keys.update_metadata(title, artist, duration).await;
+    state.media_keys.update_metadata(title, artist, duration, cover_url).await;
     Ok(())
 }
 
@@ -519,7 +538,13 @@ async fn main() {
                         println!("🎵 Track ended, attempting to play next...");
                         if let Some(track) = state.queue.play_next().await {
                             println!("▶️ Auto-playing next track: {}", track.title);
-                            let _ = state.audio.play(track).await;
+                            // Check if track is downloaded and use local file if available
+                            if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
+                                println!("🎵 Auto-playing from local file: {}", file_path);
+                                let _ = state.audio.play_from_file(track, file_path).await;
+                            } else {
+                                let _ = state.audio.play(track).await;
+                            }
                         } else {
                             println!("⏹️ No more tracks in queue");
                         }
