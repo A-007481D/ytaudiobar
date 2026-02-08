@@ -3,7 +3,7 @@ use crate::ytdlp_installer::YTDLPInstaller;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
@@ -133,7 +133,7 @@ impl DownloadManager {
 
     async fn has_downloads_in_directory(&self, dir: &PathBuf) -> bool {
         if let Ok(entries) = std::fs::read_dir(dir) {
-            let audio_extensions = ["m4a", "webm", "mp3", "aac", "ogg"];
+            let audio_extensions = ["flac", "m4a", "webm", "mp3", "aac", "ogg"];
             for entry in entries.flatten() {
                 if let Some(ext) = entry.path().extension() {
                     if audio_extensions.contains(&ext.to_str().unwrap_or("")) {
@@ -160,7 +160,7 @@ impl DownloadManager {
         let mut error_count = 0;
 
         if let Ok(entries) = std::fs::read_dir(from) {
-            let audio_extensions = ["m4a", "webm", "mp3", "aac", "ogg", "json"];
+            let audio_extensions = ["flac", "m4a", "webm", "mp3", "aac", "ogg", "json"];
 
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -281,12 +281,14 @@ impl DownloadManager {
         let video_url = format!("https://www.youtube.com/watch?v={}", track.id);
 
         // Build format string based on quality setting
+        // Prefer formats that Symphonia fully supports (MP3, M4A/AAC, OGG/Vorbis, FLAC)
+        // Avoid WebM/Opus which has incomplete Symphonia support
         let format_string = match quality.as_str() {
-            "320" => "bestaudio[abr<=320]/bestaudio",
-            "256" => "bestaudio[abr<=256]/bestaudio",
-            "192" => "bestaudio[abr<=192]/bestaudio",
-            "128" => "bestaudio[abr<=128]/bestaudio",
-            _ => "bestaudio[ext=m4a]/bestaudio", // "best" or default
+            "320" => "bestaudio[abr<=320][ext=mp3]/bestaudio[abr<=320][ext=m4a]/bestaudio[abr<=320][ext=ogg]/bestaudio[abr<=320]",
+            "256" => "bestaudio[abr<=256][ext=mp3]/bestaudio[abr<=256][ext=m4a]/bestaudio[abr<=256][ext=ogg]/bestaudio[abr<=256]",
+            "192" => "bestaudio[abr<=192][ext=mp3]/bestaudio[abr<=192][ext=m4a]/bestaudio[abr<=192][ext=ogg]/bestaudio[abr<=192]",
+            "128" => "bestaudio[abr<=128][ext=mp3]/bestaudio[abr<=128][ext=m4a]/bestaudio[abr<=128][ext=ogg]/bestaudio[abr<=128]",
+            _ => "bestaudio[ext=mp3]/bestaudio[ext=m4a]/bestaudio[ext=ogg]/bestaudio",
         };
 
         // Build bypass arguments
@@ -563,7 +565,7 @@ fn sanitize_filename(name: &str) -> String {
 }
 
 fn find_audio_file(dir: &PathBuf, video_id: &str) -> Option<PathBuf> {
-    let extensions = ["m4a", "webm", "mp3", "aac", "ogg"];
+    let extensions = ["flac", "m4a", "webm", "mp3", "aac", "ogg"];
 
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {

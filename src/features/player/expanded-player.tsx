@@ -11,11 +11,28 @@ interface ExpandedPlayerProps {
 export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) {
     const [position, setPosition] = useState(audioState.current_position)
     const [playbackRate, setPlaybackRate] = useState(audioState.playback_rate)
+    const [isSeeking, setIsSeeking] = useState(false)
+    const [isSeekingBackend, setIsSeekingBackend] = useState(false)
+    const [targetSeekPosition, setTargetSeekPosition] = useState<number | null>(null)
 
     useEffect(() => {
-        setPosition(audioState.current_position)
+        // If we're waiting for backend to catch up to our target position
+        if (targetSeekPosition !== null) {
+            // Check if backend has caught up (within 0.5 seconds)
+            if (Math.abs(audioState.current_position - targetSeekPosition) < 0.5) {
+                setTargetSeekPosition(null)
+                setPosition(audioState.current_position)
+            }
+            // Otherwise keep showing target position
+            return
+        }
+
+        // Only update position from audioState if we're not currently seeking
+        if (!isSeeking) {
+            setPosition(audioState.current_position)
+        }
         setPlaybackRate(audioState.playback_rate)
-    }, [audioState])
+    }, [audioState, isSeeking, targetSeekPosition])
 
     const handleTogglePlayPause = async () => {
         try {
@@ -41,13 +58,35 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
         }
     }
 
-    const handleSeek = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Update visual position while dragging (no seek yet)
+    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newPosition = parseFloat(e.target.value)
         setPosition(newPosition)
+    }
+
+    // Start seeking (mouse down)
+    const handleSeekStart = () => {
+        setIsSeeking(true)
+    }
+
+    // Commit the seek (mouse up / touch end)
+    const handleSeekEnd = async (e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>) => {
+        const target = e.currentTarget as HTMLInputElement
+        const newPosition = parseFloat(target.value)
+
+        // Keep slider at target position
+        setPosition(newPosition)
+        setTargetSeekPosition(newPosition)
+        setIsSeeking(false)
+        setIsSeekingBackend(true)
+
         try {
             await seekTo(newPosition)
         } catch (error) {
             console.error('Failed to seek:', error)
+            setTargetSeekPosition(null)
+        } finally {
+            setIsSeekingBackend(false)
         }
     }
 
@@ -107,10 +146,10 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                     <button
                         onClick={handleTogglePlayPause}
                         className="w-12 h-12 flex items-center justify-center rounded-full bg-[var(--macos-blue)] hover:opacity-90 transition-opacity"
-                        aria-label={audioState.is_loading ? 'Loading...' : audioState.is_playing ? 'Pause' : 'Play'}
-                        disabled={audioState.is_loading}
+                        aria-label={audioState.is_loading || isSeekingBackend ? 'Loading...' : audioState.is_playing ? 'Pause' : 'Play'}
+                        disabled={audioState.is_loading || isSeekingBackend}
                     >
-                        {audioState.is_loading ? (
+                        {audioState.is_loading || isSeekingBackend ? (
                             <Loader2 className="w-6 h-6 text-white animate-spin" />
                         ) : audioState.is_playing ? (
                             <Pause className="w-6 h-6 text-white fill-white" />
@@ -136,7 +175,11 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                         min="0"
                         max={audioState.duration || 100}
                         value={position}
-                        onChange={handleSeek}
+                        onChange={handleSliderChange}
+                        onMouseDown={handleSeekStart}
+                        onMouseUp={handleSeekEnd}
+                        onTouchStart={handleSeekStart}
+                        onTouchEnd={handleSeekEnd}
                         disabled={audioState.duration === 0}
                         className="w-full h-[6px] bg-muted/30 rounded-full appearance-none cursor-pointer
                                  [&::-webkit-slider-thumb]:appearance-none

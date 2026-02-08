@@ -8,6 +8,176 @@ use tokio::sync::{mpsc, Mutex};
 use tauri::{AppHandle, Emitter};
 use std::sync::mpsc as std_mpsc;
 
+// Symphonia imports for direct decoding + fast seeking
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+use symphonia::core::units::Time;
+
+// Custom audio source that wraps Symphonia for low-memory streaming + fast seeking
+struct SymphoniaSource {
+    format_reader: Box<dyn FormatReader>,
+    decoder: Box<dyn symphonia::core::codecs::Decoder>,
+    track_id: u32,
+    sample_rate: u32,
+    channels: u16,
+    current_buf: Vec<i16>,
+    buf_index: usize,
+}
+
+impl SymphoniaSource {
+    /// Create a new SymphoniaSource from a file path
+    fn new(path: &str) -> Result<Self, String> {
+        let file = std::fs::File::open(path)
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+        // Set format hint from file extension
+        let mut hint = Hint::new();
+        if let Some(ext) = std::path::Path::new(path).extension().and_then(|s| s.to_str()) {
+            hint.with_extension(ext);
+        }
+
+        // Probe the format
+        let probed = symphonia::default::get_probe()
+            .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+            .map_err(|e| format!("Failed to probe audio format: {}", e))?;
+
+        let format_reader = probed.format;
+
+        // Get the default audio track
+        let track = format_reader.default_track()
+            .ok_or("No audio track found")?;
+
+        let track_id = track.id;
+        let codec_params = track.codec_params.clone();
+
+        let channels = codec_params.channels
+            .map(|c| c.count() as u16)
+            .unwrap_or(2);
+        let sample_rate = codec_params.sample_rate.unwrap_or(44100);
+
+        println!("🎵 SymphoniaSource: {}ch, {}Hz", channels, sample_rate);
+
+        // Create decoder
+        let decoder = symphonia::default::get_codecs()
+            .make(&codec_params, &DecoderOptions::default())
+            .map_err(|e| format!("Failed to create decoder: {}", e))?;
+
+        Ok(Self {
+            format_reader,
+            decoder,
+            track_id,
+            sample_rate,
+            channels,
+            current_buf: Vec::new(),
+            buf_index: 0,
+        })
+    }
+
+    /// Create a new SymphoniaSource and seek to a position (FAST - uses seek tables)
+    fn seek_to_time(path: &str, position_secs: f64) -> Result<Self, String> {
+        let mut source = Self::new(path)?;
+
+        // Use Coarse seeking - uses FLAC seek tables for O(1) seeking
+        let seek_time = Time {
+            seconds: position_secs as u64,
+            frac: position_secs.fract(),
+        };
+
+        source.format_reader
+            .seek(SeekMode::Coarse, SeekTo::Time { time: seek_time, track_id: None })
+            .map_err(|e| format!("Failed to seek: {}", e))?;
+
+        // Reset decoder state after seeking
+        source.decoder.reset();
+
+        // Clear any stale buffer
+        source.current_buf.clear();
+        source.buf_index = 0;
+
+        Ok(source)
+    }
+
+    /// Decode the next packet into the internal buffer
+    fn decode_next_packet(&mut self) -> bool {
+        loop {
+            let packet = match self.format_reader.next_packet() {
+                Ok(p) => p,
+                Err(_) => return false, // End of stream or error
+            };
+
+            // Skip packets from other tracks
+            if packet.track_id() != self.track_id {
+                continue;
+            }
+
+            let decoded = match self.decoder.decode(&packet) {
+                Ok(d) => d,
+                Err(_) => return false,
+            };
+
+            // Convert decoded audio to interleaved i16 samples
+            let spec = *decoded.spec();
+            let capacity = decoded.capacity() as u64;
+
+            if capacity == 0 {
+                continue;
+            }
+
+            let mut sample_buf = SampleBuffer::<i16>::new(capacity, spec);
+            sample_buf.copy_interleaved_ref(decoded);
+
+            self.current_buf = sample_buf.samples().to_vec();
+            self.buf_index = 0;
+            return true;
+        }
+    }
+}
+
+impl Iterator for SymphoniaSource {
+    type Item = i16;
+
+    fn next(&mut self) -> Option<i16> {
+        // If buffer is exhausted, decode the next packet
+        if self.buf_index >= self.current_buf.len() {
+            if !self.decode_next_packet() {
+                return None; // End of stream
+            }
+        }
+
+        let sample = self.current_buf[self.buf_index];
+        self.buf_index += 1;
+        Some(sample)
+    }
+}
+
+impl Source for SymphoniaSource {
+    fn current_frame_len(&self) -> Option<usize> {
+        if self.buf_index < self.current_buf.len() {
+            Some(self.current_buf.len() - self.buf_index)
+        } else {
+            None
+        }
+    }
+
+    fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        None
+    }
+}
+
 // Helper function to build YouTube bypass arguments
 // Start with no bypass, escalate if needed
 fn build_youtube_bypass_args() -> Vec<String> {
@@ -304,7 +474,8 @@ fn audio_thread(
     println!("✅ Audio output stream created");
 
     let mut current_sink: Option<Sink> = None;
-    let mut current_samples: Option<Vec<i16>> = None; // Store samples for seeking
+    let mut current_samples: Option<Vec<i16>> = None; // Store samples for seeking (memory-based playback)
+    let mut current_file_path: Option<String> = None; // Store file path for seeking (file-based playback)
     let mut position_timer = PlaybackTimer::new(); // Track playback position
     let mut last_position_update = Instant::now();
 
@@ -362,6 +533,7 @@ fn audio_thread(
                     sink.stop();
                 }
                 current_samples = None;
+                current_file_path = None; // Not file-based playback
 
                 let video_url = format!("https://www.youtube.com/watch?v={}", track.id);
                 println!("📥 Fetching audio via yt-dlp + ffmpeg pipeline...");
@@ -497,102 +669,179 @@ fn audio_thread(
                     sink.stop();
                 }
                 current_samples = None;
+                current_file_path = None;
 
-                println!("📥 Loading audio from local file: {}", file_path);
+                println!("📥 Playing from local file: {}", file_path);
 
-                // Use ffmpeg to convert local file to raw PCM
-                let ffmpeg_output = match Command::new("ffmpeg")
-                    .args(&[
-                        "-i", &file_path,
-                        "-f", "s16le",
-                        "-acodec", "pcm_s16le",
-                        "-ar", &SAMPLE_RATE.to_string(),
-                        "-ac", &CHANNELS.to_string(),
-                        "-loglevel", "error",
-                        "pipe:1",
-                    ])
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .output()
-                {
-                    Ok(output) => output,
-                    Err(e) => {
-                        eprintln!("❌ Failed to run ffmpeg on local file: {}", e);
-                        eprintln!("Make sure ffmpeg is installed and in PATH");
-                        continue;
+                // Try SymphoniaSource first (low memory + fast seeking)
+                let symphonia_result = SymphoniaSource::new(&file_path);
+
+                match symphonia_result {
+                    Ok(source) => {
+                        println!("✅ SymphoniaSource created (low memory streaming)");
+
+                        let Ok(sink) = Sink::try_new(&stream_handle) else {
+                            eprintln!("❌ Failed to create sink");
+                            continue;
+                        };
+
+                        let (volume, rate) = {
+                            let state_guard = state.blocking_lock();
+                            (state_guard.volume, state_guard.playback_rate)
+                        };
+
+                        sink.set_volume(volume);
+                        sink.set_speed(rate);
+                        sink.append(source.convert_samples::<f32>());
+                        sink.play();
+
+                        current_sink = Some(sink);
+                        current_file_path = Some(file_path.clone());
+
+                        position_timer.start(0.0, rate);
+                        last_position_update = Instant::now();
+
+                        {
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_loading = false;
+                            state_guard.is_playing = true;
+                            state_guard.current_position = 0.0;
+                        }
+                        let _ = state_change_tx.send(());
+
+                        println!("▶️ Streaming: {} (LOW MEMORY + FAST SEEK)", track.title);
                     }
-                };
+                    Err(e) => {
+                        // Fallback to memory mode using ffmpeg
+                        eprintln!("⚠️ SymphoniaSource failed: {}", e);
+                        println!("📥 Falling back to memory mode (ffmpeg)...");
 
-                if !ffmpeg_output.status.success() {
-                    eprintln!("❌ ffmpeg conversion failed for local file");
-                    continue;
+                        let ffmpeg_output = match Command::new("ffmpeg")
+                            .args(&[
+                                "-i", &file_path,
+                                "-f", "s16le",
+                                "-acodec", "pcm_s16le",
+                                "-ar", &SAMPLE_RATE.to_string(),
+                                "-ac", &CHANNELS.to_string(),
+                                "-loglevel", "error",
+                                "pipe:1",
+                            ])
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::null())
+                            .output()
+                        {
+                            Ok(output) => output,
+                            Err(e) => {
+                                eprintln!("❌ Failed to run ffmpeg: {}", e);
+                                continue;
+                            }
+                        };
+
+                        if !ffmpeg_output.status.success() {
+                            eprintln!("❌ ffmpeg conversion failed");
+                            continue;
+                        }
+
+                        let pcm_bytes = ffmpeg_output.stdout;
+                        if pcm_bytes.is_empty() {
+                            eprintln!("❌ No audio data from ffmpeg");
+                            continue;
+                        }
+
+                        let samples: Vec<i16> = pcm_bytes
+                            .chunks_exact(2)
+                            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+                            .collect();
+
+                        current_samples = Some(samples.clone());
+
+                        let source = SamplesBuffer::new(CHANNELS, SAMPLE_RATE, samples);
+
+                        let Ok(sink) = Sink::try_new(&stream_handle) else {
+                            eprintln!("❌ Failed to create sink");
+                            continue;
+                        };
+
+                        let (volume, rate) = {
+                            let state_guard = state.blocking_lock();
+                            (state_guard.volume, state_guard.playback_rate)
+                        };
+
+                        sink.set_volume(volume);
+                        sink.set_speed(rate);
+                        sink.append(source.convert_samples::<f32>());
+                        sink.play();
+
+                        current_sink = Some(sink);
+
+                        position_timer.start(0.0, rate);
+                        last_position_update = Instant::now();
+
+                        {
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_loading = false;
+                            state_guard.is_playing = true;
+                            state_guard.current_position = 0.0;
+                        }
+                        let _ = state_change_tx.send(());
+
+                        println!("▶️ Playing from memory: {} (FALLBACK)", track.title);
+                    }
                 }
-
-                let pcm_bytes = ffmpeg_output.stdout;
-                println!("✅ Got {} bytes of raw PCM audio from local file", pcm_bytes.len());
-
-                if pcm_bytes.is_empty() {
-                    eprintln!("❌ No audio data received from local file");
-                    continue;
-                }
-
-                // Convert bytes to i16 samples
-                let samples: Vec<i16> = pcm_bytes
-                    .chunks_exact(2)
-                    .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                    .collect();
-
-                println!("✅ Converted to {} samples", samples.len());
-
-                // Store samples for seeking
-                current_samples = Some(samples.clone());
-
-                // Create source and sink
-                let source = SamplesBuffer::new(CHANNELS, SAMPLE_RATE, samples);
-
-                println!("🔊 Creating audio sink...");
-                let Ok(sink) = Sink::try_new(&stream_handle) else {
-                    eprintln!("❌ Failed to create sink");
-                    continue;
-                };
-
-                // Get current settings from state
-                let (volume, rate) = {
-                    let state_guard = state.blocking_lock();
-                    (state_guard.volume, state_guard.playback_rate)
-                };
-
-                sink.set_volume(volume);
-                sink.set_speed(rate);
-                sink.append(source.convert_samples::<f32>());
-                sink.play();
-
-                current_sink = Some(sink);
-
-                // Start position timer
-                position_timer.start(0.0, rate);
-                last_position_update = Instant::now();
-
-                // Update state
-                {
-                    let mut state_guard = state.blocking_lock();
-                    state_guard.is_loading = false;
-                    state_guard.is_playing = true;
-                    state_guard.current_position = 0.0;
-                }
-                let _ = state_change_tx.send(());
-
-                println!("▶️ Playing from local file: {} (position timer started at 0.0s)", track.title);
             }
             AudioCommand::Seek(position) => {
-                if let Some(samples) = &current_samples {
-                    // Stop current playback
-                    if let Some(sink) = current_sink.take() {
-                        sink.stop();
-                    }
+                // Stop current playback
+                if let Some(sink) = current_sink.take() {
+                    sink.stop();
+                }
 
+                // Handle file-based seeking (Symphonia fast seek using seek tables)
+                if let Some(file_path) = &current_file_path {
+                    let seek_start = Instant::now();
+                    println!("⏩ Seeking to {:.1}s...", position);
+
+                    // Use SymphoniaSource::seek_to_time - FAST (uses FLAC seek tables)
+                    let source = match SymphoniaSource::seek_to_time(file_path, position) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("❌ Failed to seek: {}", e);
+                            continue;
+                        }
+                    };
+
+                    let Ok(sink) = Sink::try_new(&stream_handle) else {
+                        eprintln!("❌ Failed to create sink for seek");
+                        continue;
+                    };
+
+                    let (volume, rate) = {
+                        let state_guard = state.blocking_lock();
+                        (state_guard.volume, state_guard.playback_rate)
+                    };
+
+                    sink.set_volume(volume);
+                    sink.set_speed(rate);
+                    sink.append(source.convert_samples::<f32>());
+                    sink.play();
+
+                    current_sink = Some(sink);
+
+                    position_timer.start(position, rate);
+                    last_position_update = Instant::now();
+
+                    {
+                        let mut state_guard = state.blocking_lock();
+                        state_guard.current_position = position;
+                        state_guard.is_playing = true;
+                    }
+                    let _ = state_change_tx.send(());
+
+                    let seek_ms = seek_start.elapsed().as_secs_f64() * 1000.0;
+                    println!("⏩ Seeked to {:.1}s - took {:.1}ms", position, seek_ms);
+                }
+                // Handle memory-based seeking (for non-downloaded tracks)
+                else if let Some(samples) = &current_samples {
                     // Calculate sample index from position
-                    // position_secs * sample_rate * channels = sample index
                     let sample_index = (position * SAMPLE_RATE as f64 * CHANNELS as f64) as usize;
                     let sample_index = sample_index.min(samples.len());
 
@@ -626,11 +875,11 @@ fn audio_thread(
 
                     current_sink = Some(sink);
 
-                    // Update position timer - always restart from seek position
+                    // Update position timer
                     position_timer.start(position, rate);
                     last_position_update = Instant::now();
 
-                    // Update state with actual position
+                    // Update state
                     {
                         let mut state_guard = state.blocking_lock();
                         state_guard.current_position = position;
@@ -638,7 +887,7 @@ fn audio_thread(
                     }
                     let _ = state_change_tx.send(());
 
-                    println!("⏩ Seeked to {:.1}s (timer reset to {:.1}s)", position, position);
+                    println!("⏩ Seeked to {:.1}s (memory-based)", position);
                 }
             }
             AudioCommand::TogglePlayPause => {
@@ -651,8 +900,9 @@ fn audio_thread(
                 drop(state_guard);
 
                 // Check if track ended (at or near duration, or sink is gone) - need to restart
+                let has_track = current_samples.is_some() || current_file_path.is_some();
                 let track_ended = (current_pos >= duration - 0.5 && duration > 0.0) ||
-                                  (current_samples.is_some() && current_sink.is_none());
+                                  (has_track && current_sink.is_none());
 
                 if is_playing {
                     // Pause
@@ -668,14 +918,21 @@ fn audio_thread(
                     }
                 } else if track_ended {
                     // Track ended, restart from beginning
-                    if let Some(samples) = &current_samples {
-                        // Stop current sink if exists
-                        if let Some(sink) = current_sink.take() {
-                            sink.stop();
-                        }
+                    // Stop current sink if exists
+                    if let Some(sink) = current_sink.take() {
+                        sink.stop();
+                    }
 
-                        // Create new sink from the beginning
-                        let source = SamplesBuffer::new(CHANNELS, SAMPLE_RATE, samples.clone());
+                    // Handle file-based restart using SymphoniaSource
+                    if let Some(file_path) = &current_file_path {
+                        let source = match SymphoniaSource::new(file_path) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                eprintln!("❌ Failed to create source for restart: {}", e);
+                                continue;
+                            }
+                        };
+
                         if let Ok(sink) = Sink::try_new(&stream_handle) {
                             sink.set_volume(volume);
                             sink.set_speed(rate);
@@ -683,7 +940,6 @@ fn audio_thread(
                             sink.play();
                             current_sink = Some(sink);
 
-                            // Reset position timer to 0
                             position_timer.start(0.0, rate);
                             last_position_update = Instant::now();
 
@@ -693,6 +949,27 @@ fn audio_thread(
                             drop(state_guard);
                             let _ = state_change_tx.send(());
                             println!("🔄 Restarted track from beginning");
+                        }
+                    }
+                    // Handle memory-based restart
+                    else if let Some(samples) = &current_samples {
+                        let source = SamplesBuffer::new(CHANNELS, SAMPLE_RATE, samples.clone());
+                        if let Ok(sink) = Sink::try_new(&stream_handle) {
+                            sink.set_volume(volume);
+                            sink.set_speed(rate);
+                            sink.append(source.convert_samples::<f32>());
+                            sink.play();
+                            current_sink = Some(sink);
+
+                            position_timer.start(0.0, rate);
+                            last_position_update = Instant::now();
+
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_playing = true;
+                            state_guard.current_position = 0.0;
+                            drop(state_guard);
+                            let _ = state_change_tx.send(());
+                            println!("🔄 Restarted track from beginning (memory-based)");
                         }
                     }
                 } else {
@@ -728,6 +1005,7 @@ fn audio_thread(
                     sink.stop();
                 }
                 current_samples = None;
+                current_file_path = None;
                 position_timer.stop();
                 let mut state_guard = state.blocking_lock();
                 state_guard.is_playing = false;
