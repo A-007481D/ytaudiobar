@@ -153,19 +153,25 @@ jobs:
 
       - name: Generate latest.json
         run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+
+          # Download signature files from the release
+          WIN_SIG=$(curl -sL "https://github.com/ilyassan/ytaudiobar/releases/download/${GITHUB_REF#refs/tags/}/YTAudioBar_${VERSION}_x64_en-US.msi.zip.sig" || echo "")
+          LINUX_SIG=$(curl -sL "https://github.com/ilyassan/ytaudiobar/releases/download/${GITHUB_REF#refs/tags/}/YTAudioBar_${VERSION}_amd64.AppImage.tar.gz.sig" || echo "")
+
           cat > latest.json << EOF
           {
-            "version": "${GITHUB_REF#refs/tags/v}",
+            "version": "$VERSION",
             "notes": "Update available",
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "windows-x86_64": {
-                "signature": "",
-                "url": "https://github.com/ilyassan/ytaudiobar/releases/download/${GITHUB_REF#refs/tags/}/YTAudioBar_${GITHUB_REF#refs/tags/v}_x64_en-US.msi.zip"
+                "signature": "$WIN_SIG",
+                "url": "https://github.com/ilyassan/ytaudiobar/releases/download/${GITHUB_REF#refs/tags/}/YTAudioBar_${VERSION}_x64_en-US.msi.zip"
               },
               "linux-x86_64": {
-                "signature": "",
-                "url": "https://github.com/ilyassan/ytaudiobar/releases/download/${GITHUB_REF#refs/tags/}/ytaudiobar_${GITHUB_REF#refs/tags/v}_amd64.AppImage.tar.gz"
+                "signature": "$LINUX_SIG",
+                "url": "https://github.com/ilyassan/ytaudiobar/releases/download/${GITHUB_REF#refs/tags/}/YTAudioBar_${VERSION}_amd64.AppImage.tar.gz"
               }
             }
           }
