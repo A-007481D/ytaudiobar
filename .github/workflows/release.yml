@@ -56,9 +56,6 @@ jobs:
 
       - name: Create signed updater archives (Windows)
         if: matrix.platform == 'windows'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         shell: pwsh
         run: |
           cd src-tauri/target/release/bundle/msi
@@ -68,18 +65,19 @@ jobs:
             Write-Host "Creating $zip"
             Compress-Archive -Path $msi -DestinationPath $zip -Force
             Write-Host "Signing $zip"
+            $env:TAURI_SIGNING_PRIVATE_KEY = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+            $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
             npx @tauri-apps/cli signer sign $zip
           }
           Get-ChildItem
 
       - name: Create signed updater archives (Linux)
         if: matrix.platform == 'linux'
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         shell: bash
         run: |
           cd src-tauri/target/release/bundle/appimage
+          export TAURI_SIGNING_PRIVATE_KEY="${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
           for appimage in *.AppImage; do
             echo "Creating ${appimage}.tar.gz"
             tar czf "${appimage}.tar.gz" "$appimage"
