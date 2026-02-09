@@ -14,6 +14,7 @@ export function AppHeader({ query, onQueryChange, isMusicMode, onMusicModeToggle
             <div className="px-4 pt-4 pb-3 flex items-center gap-2">
                 <Music className="w-5 h-5 text-foreground" />
                 <h1 className="text-[15px] font-semibold text-foreground">YTAudioBar</h1>
+                <span className="text-[11px] text-muted-foreground">v1.1.4</span>
             </div>
 
             {/* Search Bar Section */}
