@@ -1,6 +1,6 @@
 {
   "productName": "YTAudioBar",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "identifier": "com.ytaudiobar.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -21,13 +21,20 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "createUpdaterArtifacts": true,
+      "wix": null,
+      "nsis": null
     },
     "linux": {
       "deb": {
         "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
       }
-    }
+    },
+    "createUpdaterArtifacts": "v1Compatible"
   },
   "plugins": {
     "process": {
