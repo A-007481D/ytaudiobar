@@ -9,6 +9,7 @@ export function QueueTab() {
     const [shuffleMode, setShuffleMode] = useState(false)
     const [repeatMode, setRepeatMode] = useState<RepeatMode>('Off')
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
     const [isLoading, setIsLoading] = useState(true)
 
     const loadQueue = async () => {
@@ -54,9 +55,27 @@ export function QueueTab() {
         setDraggedIndex(index)
     }
 
-    const handleDragOver = (e: React.DragEvent, index: number) => {
+    const handleDragEnter = (e: React.DragEvent, index: number) => {
         e.preventDefault()
         if (draggedIndex === null || draggedIndex === index) return
+        setDragOverIndex(index)
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+    }
+
+    const handleDragLeave = () => {
+        setDragOverIndex(null)
+    }
+
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+        e.preventDefault()
+        if (draggedIndex === null || draggedIndex === dropIndex) {
+            setDraggedIndex(null)
+            setDragOverIndex(null)
+            return
+        }
 
         const newQueue = [...queue]
         const draggedItem = newQueue[draggedIndex]
@@ -65,22 +84,22 @@ export function QueueTab() {
         newQueue.splice(draggedIndex, 1)
 
         // Insert at new position
-        newQueue.splice(index, 0, draggedItem)
+        newQueue.splice(dropIndex, 0, draggedItem)
 
         setQueue(newQueue)
-        setDraggedIndex(index)
+        setDraggedIndex(null)
+        setDragOverIndex(null)
+
+        // Update queue order in backend
+        reorderQueue(newQueue).catch((error) => {
+            console.error('Failed to reorder queue:', error)
+            loadQueue()
+        })
     }
 
-    const handleDragEnd = async () => {
+    const handleDragEnd = () => {
         setDraggedIndex(null)
-        // Update queue order in backend
-        try {
-            await reorderQueue(queue)
-        } catch (error) {
-            console.error('Failed to reorder queue:', error)
-            // Reload queue on error
-            await loadQueue()
-        }
+        setDragOverIndex(null)
     }
 
     return (
@@ -138,10 +157,17 @@ export function QueueTab() {
                                 key={`${track.id}-${index}`}
                                 draggable
                                 onDragStart={() => handleDragStart(index)}
-                                onDragOver={(e) => handleDragOver(e, index)}
+                                onDragEnter={(e) => handleDragEnter(e, index)}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={(e) => handleDrop(e, index)}
                                 onDragEnd={handleDragEnd}
-                                className={`group flex items-center gap-1 transition-opacity ${
-                                    draggedIndex === index ? 'opacity-50' : ''
+                                className={`group flex items-center gap-1 transition-all duration-200 ${
+                                    draggedIndex === index ? 'opacity-30 scale-95' : 'opacity-100'
+                                } ${
+                                    dragOverIndex === index && draggedIndex !== index
+                                        ? 'border-t-2 border-[var(--macos-blue)] pt-2'
+                                        : ''
                                 }`}
                             >
                                 {/* Drag Handle */}
