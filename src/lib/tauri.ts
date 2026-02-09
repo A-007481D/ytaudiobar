@@ -36,6 +36,7 @@ export interface AudioState {
     duration: number
     playback_rate: number
     current_track: YTVideoInfo | null
+    download_progress: number // 0.0 to 1.0, for progressive seeking buffer bar
 }
 
 export type RepeatMode = 'Off' | 'All' | 'One'

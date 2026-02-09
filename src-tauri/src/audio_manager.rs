@@ -12,10 +12,12 @@ use std::sync::mpsc as std_mpsc;
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSourceStream, ReadOnlySource};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
+
+
 
 // Custom audio source that wraps Symphonia for low-memory streaming + fast seeking
 struct SymphoniaSource {
@@ -76,6 +78,39 @@ impl SymphoniaSource {
             channels,
             current_buf: Vec::new(),
             buf_index: 0,
+        })
+    }
+
+    /// Create a SymphoniaSource from a Read stream (non-seekable, forward-only playback)
+    fn from_reader(reader: impl std::io::Read + Send + Sync + 'static) -> Result<Self, String> {
+        let start = Instant::now();
+
+        let read_only = ReadOnlySource::new(reader);
+        let mss = MediaSourceStream::new(Box::new(read_only), Default::default());
+
+        let hint = Hint::new();
+
+        let probed = symphonia::default::get_probe()
+            .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+            .map_err(|e| format!("Failed to probe stream: {}", e))?;
+
+        let format_reader = probed.format;
+        let track = format_reader.default_track().ok_or("No audio track found")?;
+        let track_id = track.id;
+        let codec_params = track.codec_params.clone();
+        let channels = codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
+        let sample_rate = codec_params.sample_rate.unwrap_or(44100);
+
+        println!("🎵 SymphoniaSource from stream: {}ch, {}Hz (ready in {:.0}ms)",
+            channels, sample_rate, start.elapsed().as_millis());
+
+        let decoder = symphonia::default::get_codecs()
+            .make(&codec_params, &DecoderOptions::default())
+            .map_err(|e| format!("Failed to create decoder: {}", e))?;
+
+        Ok(Self {
+            format_reader, decoder, track_id, sample_rate, channels,
+            current_buf: Vec::new(), buf_index: 0,
         })
     }
 
@@ -505,16 +540,24 @@ fn audio_thread(
             }
         }
 
-        // Periodically update position in state while playing (every 500ms)
+        // Periodically update position in state (every 500ms)
         if position_timer.is_playing() && last_position_update.elapsed() > std::time::Duration::from_millis(500) {
             let current_pos = position_timer.current_position();
             let duration = state.blocking_lock().duration;
 
             // Don't exceed duration
             let clamped_pos = current_pos.min(duration);
+
             {
                 let mut state_guard = state.blocking_lock();
                 state_guard.current_position = clamped_pos;
+                // Set download_progress based on playback type
+                // 1.0 = downloaded (file/memory), 0.0 = streaming (no seeking)
+                state_guard.download_progress = if current_file_path.is_some() || current_samples.is_some() {
+                    1.0
+                } else {
+                    0.0
+                };
             }
             let _ = state_change_tx.send(());
             last_position_update = Instant::now();
@@ -533,10 +576,10 @@ fn audio_thread(
                     sink.stop();
                 }
                 current_samples = None;
-                current_file_path = None; // Not file-based playback
+                current_file_path = None;
 
                 let video_url = format!("https://www.youtube.com/watch?v={}", track.id);
-                println!("📥 Fetching audio via yt-dlp + ffmpeg pipeline...");
+                println!("📥 Getting audio URL from yt-dlp...");
 
                 // Get yt-dlp path
                 let ytdlp_path = YTDLPInstaller::get_ytdlp_path();
@@ -544,124 +587,108 @@ fn audio_thread(
                 // Build bypass arguments
                 let bypass_args = build_youtube_bypass_args();
 
-                // Build complete argument list
+                // Build complete argument list to get the direct audio URL
                 let mut ytdlp_args = vec![
-                    "-f".to_string(), "bestaudio".to_string(),
-                    "-o".to_string(), "-".to_string(),
+                    "-f".to_string(),
+                    "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio".to_string(),
+                    "-g".to_string(), // Get URL only
                     "--no-warnings".to_string(),
-                    "--quiet".to_string(),
                 ];
                 ytdlp_args.extend(bypass_args);
                 ytdlp_args.push(video_url.clone());
 
                 let args_refs: Vec<&str> = ytdlp_args.iter().map(|s| s.as_str()).collect();
 
-                // Use yt-dlp to pipe audio through ffmpeg to get raw PCM
-                let ytdlp_child = match Command::new(&ytdlp_path)
+                // Get the audio URL
+                let ytdlp_output = match Command::new(&ytdlp_path)
                     .args(&args_refs)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .spawn()
-                {
-                    Ok(child) => child,
-                    Err(e) => {
-                        eprintln!("❌ Failed to spawn yt-dlp: {}", e);
-                        continue;
-                    }
-                };
-
-                let ytdlp_stdout = match ytdlp_child.stdout {
-                    Some(stdout) => stdout,
-                    None => {
-                        eprintln!("❌ Failed to capture yt-dlp stdout");
-                        continue;
-                    }
-                };
-
-                // Pipe yt-dlp output through ffmpeg to convert to raw PCM
-                let ffmpeg_output = match Command::new("ffmpeg")
-                    .args(&[
-                        "-i", "pipe:0",
-                        "-f", "s16le",
-                        "-acodec", "pcm_s16le",
-                        "-ar", &SAMPLE_RATE.to_string(),
-                        "-ac", &CHANNELS.to_string(),
-                        "-loglevel", "error",
-                        "pipe:1",
-                    ])
-                    .stdin(ytdlp_stdout)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
                     .output()
                 {
                     Ok(output) => output,
                     Err(e) => {
-                        eprintln!("❌ Failed to run ffmpeg: {}", e);
-                        eprintln!("Make sure ffmpeg is installed and in PATH");
+                        eprintln!("❌ Failed to run yt-dlp: {}", e);
                         continue;
                     }
                 };
 
-                if !ffmpeg_output.status.success() {
-                    eprintln!("❌ ffmpeg conversion failed");
+                if !ytdlp_output.status.success() {
+                    eprintln!("❌ yt-dlp failed to get audio URL");
                     continue;
                 }
 
-                let pcm_bytes = ffmpeg_output.stdout;
-                println!("✅ Got {} bytes of raw PCM audio", pcm_bytes.len());
+                let audio_url = String::from_utf8_lossy(&ytdlp_output.stdout).trim().to_string();
 
-                if pcm_bytes.is_empty() {
-                    eprintln!("❌ No audio data received");
+                if audio_url.is_empty() {
+                    eprintln!("❌ No audio URL returned from yt-dlp");
                     continue;
                 }
 
-                // Convert bytes to i16 samples
-                let samples: Vec<i16> = pcm_bytes
-                    .chunks_exact(2)
-                    .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                    .collect();
+                println!("✅ Got audio URL, starting hybrid streaming...");
 
-                println!("✅ Converted to {} samples", samples.len());
-
-                // Store samples for seeking
-                current_samples = Some(samples.clone());
-
-                // Create source and sink
-                let source = SamplesBuffer::new(CHANNELS, SAMPLE_RATE, samples);
-
-                println!("🔊 Creating audio sink...");
-                let Ok(sink) = Sink::try_new(&stream_handle) else {
-                    eprintln!("❌ Failed to create sink");
-                    continue;
+                // Start streaming playback (instant, no seeking)
+                let stream_response = match reqwest::blocking::get(&audio_url) {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        eprintln!("❌ Failed to stream audio: {}", e);
+                        {
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_loading = false;
+                        }
+                        let _ = state_change_tx.send(());
+                        continue;
+                    }
                 };
 
-                // Get current settings from state
-                let (volume, rate) = {
-                    let state_guard = state.blocking_lock();
-                    (state_guard.volume, state_guard.playback_rate)
-                };
+                let symphonia_result = SymphoniaSource::from_reader(stream_response);
 
-                sink.set_volume(volume);
-                sink.set_speed(rate);
-                sink.append(source.convert_samples::<f32>());
-                sink.play();
+                match symphonia_result {
+                    Ok(source) => {
+                        println!("✅ Streaming started (instant playback)");
 
-                current_sink = Some(sink);
+                        let Ok(sink) = Sink::try_new(&stream_handle) else {
+                            eprintln!("❌ Failed to create sink");
+                            continue;
+                        };
 
-                // Start position timer
-                position_timer.start(0.0, rate);
-                last_position_update = Instant::now();
+                        let (volume, rate) = {
+                            let state_guard = state.blocking_lock();
+                            (state_guard.volume, state_guard.playback_rate)
+                        };
 
-                // Update state
-                {
-                    let mut state_guard = state.blocking_lock();
-                    state_guard.is_loading = false;
-                    state_guard.is_playing = true;
-                    state_guard.current_position = 0.0;
+                        sink.set_volume(volume);
+                        sink.set_speed(rate);
+                        sink.append(source.convert_samples::<f32>());
+                        sink.play();
+
+                        current_sink = Some(sink);
+
+                        // Start position timer
+                        position_timer.start(0.0, rate);
+                        last_position_update = Instant::now();
+
+                        // Update state
+                        {
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_loading = false;
+                            state_guard.is_playing = true;
+                            state_guard.current_position = 0.0;
+                            state_guard.download_progress = 0.0; // 0.0 = streaming, seeking disabled
+                        }
+                        let _ = state_change_tx.send(());
+
+                        println!("▶️ Streaming: {} (instant play, no seeking)", track.title);
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ Stream failed: {}", e);
+                        eprintln!("❌ Cannot play this track");
+                        {
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_loading = false;
+                            state_guard.is_playing = false;
+                        }
+                        let _ = state_change_tx.send(());
+                    }
                 }
-                let _ = state_change_tx.send(());
-
-                println!("▶️ Playing: {} (position timer started at 0.0s)", track.title);
             }
             AudioCommand::PlayFromFile(track, file_path) => {
                 // Stop current playback
@@ -670,6 +697,7 @@ fn audio_thread(
                 }
                 current_samples = None;
                 current_file_path = None;
+
 
                 println!("📥 Playing from local file: {}", file_path);
 
@@ -706,6 +734,7 @@ fn audio_thread(
                             state_guard.is_loading = false;
                             state_guard.is_playing = true;
                             state_guard.current_position = 0.0;
+                            state_guard.download_progress = 1.0; // File fully available
                         }
                         let _ = state_change_tx.send(());
 
@@ -782,6 +811,7 @@ fn audio_thread(
                             state_guard.is_loading = false;
                             state_guard.is_playing = true;
                             state_guard.current_position = 0.0;
+                            state_guard.download_progress = 1.0; // Fully in memory
                         }
                         let _ = state_change_tx.send(());
 
@@ -790,6 +820,13 @@ fn audio_thread(
                 }
             }
             AudioCommand::Seek(position) => {
+                // Only allow seeking for downloaded tracks (file-based or memory-based)
+                // Streaming tracks don't support seeking
+                if current_file_path.is_none() && current_samples.is_none() {
+                    println!("⏩ Seeking not available - track must be downloaded for full controls");
+                    continue; // Don't stop playback, just ignore the seek
+                }
+
                 // Stop current playback
                 if let Some(sink) = current_sink.take() {
                     sink.stop();
