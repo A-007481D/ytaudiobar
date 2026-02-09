@@ -204,3 +204,9 @@ export const formatTime = (seconds: number): string => {
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
+
+// Check for updates manually
+export const checkForUpdatesManual = async (): Promise<void> => {
+    console.log('🔍 Manual update check triggered...')
+    await invoke('check_for_updates_manual')
+}

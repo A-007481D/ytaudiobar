@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Folder, Github, AlertCircle } from 'lucide-react'
+import { Folder, Github, AlertCircle, RefreshCw } from 'lucide-react'
 import { open } from '@tauri-apps/plugin-shell'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import {
@@ -7,7 +7,8 @@ import {
     setDownloadsDirectory,
     getAudioQuality,
     setAudioQuality as saveAudioQuality,
-    getAppVersion
+    getAppVersion,
+    checkForUpdatesManual
 } from '@/lib/tauri'
 import {
     Select,
@@ -31,6 +32,8 @@ export function SettingsTab() {
     const [appVersion, setAppVersion] = useState('1.0.0')
     const [isLoading, setIsLoading] = useState(true)
     const [isMigrating, setIsMigrating] = useState(false)
+    const [isCheckingUpdates, setIsCheckingUpdates] = useState(false)
+    const [updateMessage, setUpdateMessage] = useState('')
 
     // Load settings from backend
     useEffect(() => {
@@ -94,6 +97,23 @@ export function SettingsTab() {
 
     const handleReportIssue = () => {
         open('https://github.com/ilyassan/ytaudiobar/issues/new')
+    }
+
+    const handleCheckUpdates = async () => {
+        setIsCheckingUpdates(true)
+        setUpdateMessage('Checking for updates...')
+        try {
+            await checkForUpdatesManual()
+            setUpdateMessage('Update check complete! Check console logs for details.')
+            // Clear message after 5 seconds
+            setTimeout(() => setUpdateMessage(''), 5000)
+        } catch (error) {
+            console.error('Failed to check for updates:', error)
+            setUpdateMessage('Failed to check for updates. See console for details.')
+            setTimeout(() => setUpdateMessage(''), 5000)
+        } finally {
+            setIsCheckingUpdates(false)
+        }
     }
 
     if (isLoading) {
@@ -178,6 +198,25 @@ export function SettingsTab() {
                         <div className="text-[11px] text-muted-foreground">
                             Version {appVersion}
                         </div>
+                    </div>
+
+                    {/* Check for Updates Button */}
+                    <div className="mb-4">
+                        <button
+                            onClick={handleCheckUpdates}
+                            disabled={isCheckingUpdates}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--macos-blue)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
+                            <span className="text-[13px] font-medium">
+                                {isCheckingUpdates ? 'Checking...' : 'Check for Updates'}
+                            </span>
+                        </button>
+                        {updateMessage && (
+                            <p className="text-[11px] text-muted-foreground mt-2 text-center">
+                                {updateMessage}
+                            </p>
+                        )}
                     </div>
 
                     {/* Links */}

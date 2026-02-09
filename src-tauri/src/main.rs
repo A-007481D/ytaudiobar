@@ -441,18 +441,34 @@ async fn clear_media_info(state: State<'_, AppState>) -> Result<(), String> {
 async fn check_for_updates_silently(app: tauri::AppHandle) {
     use tauri_plugin_updater::UpdaterExt;
 
+    println!("🔍 Starting update check...");
+    println!("📍 Update endpoint: https://github.com/ilyassan/ytaudiobar/releases/latest/download/latest.json");
+
     match app.updater() {
         Ok(updater) => {
+            println!("✅ Updater initialized successfully");
             match updater.check().await {
                 Ok(Some(update)) => {
-                    println!("🔄 Update available: {} -> {}",
-                        update.current_version, update.version);
+                    println!("🔄 Update available!");
+                    println!("   Current version: {}", update.current_version);
+                    println!("   New version: {}", update.version);
+                    println!("   Download URL: {}", update.download_url);
 
                     // Download and install silently
-                    println!("📥 Downloading update...");
-                    match update.download_and_install(|_, _| {}, || {}).await {
+                    println!("📥 Starting download...");
+                    match update.download_and_install(|chunk_len, content_len| {
+                        if let Some(total) = content_len {
+                            let progress = (chunk_len as f64 / total as f64) * 100.0;
+                            if progress as u32 % 10 == 0 {
+                                println!("   Progress: {:.0}%", progress);
+                            }
+                        }
+                    }, || {
+                        println!("📦 Download complete, installing...");
+                    }).await {
                         Ok(_) => {
-                            println!("✅ Update installed! Will apply on next restart.");
+                            println!("✅ Update installed successfully!");
+                            println!("⚠️  RESTART THE APP to apply the update");
                         }
                         Err(e) => {
                             eprintln!("❌ Failed to download/install update: {}", e);
@@ -460,10 +476,14 @@ async fn check_for_updates_silently(app: tauri::AppHandle) {
                     }
                 }
                 Ok(None) => {
-                    println!("✅ App is up to date");
+                    println!("✅ App is already up to date");
                 }
                 Err(e) => {
                     eprintln!("⚠️ Failed to check for updates: {}", e);
+                    eprintln!("   This could be due to:");
+                    eprintln!("   - Network connectivity issues");
+                    eprintln!("   - latest.json not found on server");
+                    eprintln!("   - Invalid JSON format");
                 }
             }
         }
