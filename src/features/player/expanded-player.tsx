@@ -74,16 +74,6 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
         const target = e.currentTarget as HTMLInputElement
         const newPosition = parseFloat(target.value)
 
-        // Don't allow seeking for streaming tracks (download_progress = 0)
-        const dlProgress = audioState.download_progress ?? 1.0
-        if (dlProgress === 0) {
-            setIsSeeking(false)
-            // Snap slider back to current position
-            setPosition(audioState.current_position)
-            // TODO: Show toast message "Download this track for full playback controls"
-            return
-        }
-
         // Keep slider at target position
         setPosition(newPosition)
         setTargetSeekPosition(newPosition)
@@ -111,7 +101,6 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
     }
 
     const progress = audioState.duration > 0 ? (position / audioState.duration) * 100 : 0
-    const isStreaming = (audioState.download_progress ?? 1.0) === 0
 
     return (
         <div className="border-t border-macos-separator bg-card flex-shrink-0 px-4 py-4">
@@ -191,7 +180,7 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                         onMouseUp={handleSeekEnd}
                         onTouchStart={handleSeekStart}
                         onTouchEnd={handleSeekEnd}
-                        disabled={audioState.duration === 0 || isStreaming}
+                        disabled={audioState.duration === 0}
                         className="w-full h-[6px] bg-muted/30 rounded-full appearance-none cursor-pointer
                                  [&::-webkit-slider-thumb]:appearance-none
                                  [&::-webkit-slider-thumb]:w-3
@@ -204,11 +193,6 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                             background: `linear-gradient(to right, var(--macos-blue) ${progress}%, rgba(255,255,255,0.1) ${progress}%)`
                         }}
                     />
-                    {isStreaming && (
-                        <p className="text-[11px] text-muted-foreground mt-1 text-center">
-                            Download this track for full playback controls
-                        </p>
-                    )}
                 </div>
 
                 {/* Time Display and Playback Speed */}
