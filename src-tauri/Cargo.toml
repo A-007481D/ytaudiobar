@@ -1,6 +1,6 @@
 [package]
 name = "ytaudiobar-tauri-react"
-version = "1.0.8"
+version = "1.0.9"
 description = "YouTube Audio Player for Windows and Linux"
 authors = ["you"]
 edition = "2021"
@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.9", features = ["tray-icon", "image-png"] }
+tauri = { version = "2.9", features = ["tray-icon", "image-png", "linux-libxdo"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.41", features = ["full"] }

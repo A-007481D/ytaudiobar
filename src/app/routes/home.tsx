@@ -247,7 +247,7 @@ export function HomePage() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-background select-none">
+        <div className="flex flex-col h-screen bg-background select-none rounded-[12px] overflow-hidden">
             {/* Header - App Title + Search Bar */}
             <AppHeader
                 query={searchQuery}

@@ -9,6 +9,13 @@ import {
     setAudioQuality as saveAudioQuality,
     getAppVersion
 } from '@/lib/tauri'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 const AUDIO_QUALITY_OPTIONS = [
     { value: 'best', label: 'Best Available' },
@@ -72,8 +79,7 @@ export function SettingsTab() {
         }
     }
 
-    const handleQualityChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const quality = e.target.value
+    const handleQualityChange = async (quality: string) => {
         setAudioQuality(quality)
         try {
             await saveAudioQuality(quality)
@@ -135,17 +141,22 @@ export function SettingsTab() {
                         <label className="block text-[13px] font-medium text-foreground mb-2">
                             Audio Quality
                         </label>
-                        <select
-                            value={audioQuality}
-                            onChange={handleQualityChange}
-                            className="w-full px-3 py-2 bg-secondary rounded-lg text-[13px] text-foreground border-none outline-none focus:ring-2 focus:ring-[var(--macos-blue)] transition-all"
-                        >
-                            {AUDIO_QUALITY_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
+                        <Select value={audioQuality} onValueChange={handleQualityChange}>
+                            <SelectTrigger className="w-full bg-secondary hover:bg-secondary/80 border-none text-[13px]">
+                                <SelectValue placeholder="Select quality" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-macos-separator">
+                                {AUDIO_QUALITY_OPTIONS.map((option) => (
+                                    <SelectItem
+                                        key={option.value}
+                                        value={option.value}
+                                        className="text-[13px] focus:bg-secondary cursor-pointer"
+                                    >
+                                        {option.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <p className="text-[11px] text-muted-foreground mt-1">
                             Higher quality means larger file sizes
                         </p>

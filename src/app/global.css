@@ -123,9 +123,24 @@
 
         /* Disable overscroll/bouncing */
         @apply h-full overscroll-none;
+
+        /* Consistent font rendering across platforms */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     body {
         @apply bg-background text-foreground;
+        /* Add border-radius for frameless window (Linux/Windows) */
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    /* Root div styling for rounded window */
+    #root {
+        border-radius: 12px;
+        overflow: hidden;
+        height: 100vh;
+        /* Add subtle shadow for depth on Linux */
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
     }
 
     /* Hide scrollbars completely while keeping scroll functionality */
@@ -136,6 +151,60 @@
 
     *::-webkit-scrollbar {
         display: none; /* Chrome, Safari, Opera */
+    }
+
+    /* Ensure consistent form element styling across platforms */
+    input,
+    select,
+    textarea,
+    button {
+        font-family: inherit;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Remove default input styling on Linux */
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="number"],
+    input[type="password"] {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+
+    /* Ensure buttons don't have default styling */
+    button {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        border: none;
+        background: none;
+    }
+
+    /* Consistent range input styling across all browsers */
+    input[type="range"] {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+
+    /* Firefox range thumb */
+    input[type="range"]::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: white;
+        border: none;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+    }
+
+    /* Firefox range track */
+    input[type="range"]::-moz-range-track {
+        background: transparent;
+        border: none;
     }
 }
 
@@ -169,6 +238,17 @@
     }
     .hover-macos-button:active {
         background-color: oklch(1 0 0 / 20%);
+    }
+
+    /* Ensure consistent focus outlines across platforms */
+    *:focus-visible {
+        outline-offset: 2px;
+    }
+
+    /* Prevent text selection highlighting inconsistencies */
+    *::selection {
+        background-color: var(--macos-blue);
+        color: white;
     }
 }
 

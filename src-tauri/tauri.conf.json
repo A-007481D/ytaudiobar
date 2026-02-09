@@ -1,6 +1,6 @@
 {
   "productName": "YTAudioBar",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "identifier": "com.ytaudiobar.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -58,7 +58,8 @@
         "center": false,
         "skipTaskbar": true,
         "focus": false,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "transparent": true
       }
     ],
     "security": {
@@ -91,8 +92,8 @@
       ]
     },
     "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": false,
       "menuOnLeftClick": false,
       "tooltip": "YTAudioBar"
     }
