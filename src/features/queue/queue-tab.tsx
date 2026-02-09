@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Shuffle, Repeat, Repeat1, ListMusic, GripVertical } from 'lucide-react'
-import { getQueue, getQueueInfo, toggleShuffle, cycleRepeatMode, reorderQueue, type YTVideoInfo, type RepeatMode } from '@/lib/tauri'
+import { getQueue, toggleShuffle, cycleRepeatMode, reorderQueue, type YTVideoInfo, type RepeatMode } from '@/lib/tauri'
 import { TrackItem } from '@/components/track-item'
 import { TabHeader } from '@/components/tab-header'
 
 export function QueueTab() {
     const [queue, setQueue] = useState<YTVideoInfo[]>([])
-    const [queueInfo, setQueueInfo] = useState('')
     const [shuffleMode, setShuffleMode] = useState(false)
     const [repeatMode, setRepeatMode] = useState<RepeatMode>('Off')
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -14,12 +13,8 @@ export function QueueTab() {
 
     const loadQueue = async () => {
         try {
-            const [queueData, info] = await Promise.all([
-                getQueue(),
-                getQueueInfo()
-            ])
+            const queueData = await getQueue()
             setQueue(queueData)
-            setQueueInfo(info)
         } catch (error) {
             console.error('Failed to load queue:', error)
         } finally {
@@ -92,7 +87,6 @@ export function QueueTab() {
         <div className="flex flex-col h-full bg-background">
             <TabHeader
                 title="Queue"
-                subtitle={queue.length > 0 ? queueInfo : undefined}
                 actions={
                     <>
                         <button
@@ -104,7 +98,7 @@ export function QueueTab() {
                             }`}
                             title={shuffleMode ? 'Shuffle On' : 'Shuffle Off'}
                         >
-                            <Shuffle className="w-5 h-5" />
+                            <Shuffle className="w-4 h-4" />
                         </button>
                         <button
                             onClick={handleCycleRepeat}
@@ -116,9 +110,9 @@ export function QueueTab() {
                             title={`Repeat ${repeatMode}`}
                         >
                             {repeatMode === 'One' ? (
-                                <Repeat1 className="w-5 h-5" />
+                                <Repeat1 className="w-4 h-4" />
                             ) : (
-                                <Repeat className="w-5 h-5" />
+                                <Repeat className="w-4 h-4" />
                             )}
                         </button>
                     </>

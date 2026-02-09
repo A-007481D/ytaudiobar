@@ -1,6 +1,5 @@
-import { Volume2, VolumeX, SkipBack, SkipForward, Play, Pause, ChevronDown, Loader2 } from 'lucide-react'
+import { Volume2, VolumeX, SkipBack, SkipForward, Play, Pause, Maximize2, Loader2 } from 'lucide-react'
 import { togglePlayPause, playPrevious, playNext, type YTVideoInfo } from '@/lib/tauri'
-import { ScrollingText } from '@/components/scrolling-text'
 
 interface MiniPlayerProps {
     track: YTVideoInfo
@@ -40,19 +39,15 @@ export function MiniPlayer({ track, isPlaying, isLoading, onExpand }: MiniPlayer
             {/* Speaker Icon - 11px */}
             <div className="flex-shrink-0">
                 {isPlaying ? (
-                    <Volume2 className="w-[11px] h-[11px] text-muted-foreground" />
+                    <Volume2 className="w-[11px] h-[11px] text-[var(--macos-blue)]" />
                 ) : (
                     <VolumeX className="w-[11px] h-[11px] text-muted-foreground" />
                 )}
             </div>
 
             {/* Track Info - Single line with separator */}
-            <div className="flex-1 min-w-0 text-[13px] text-foreground">
-                <ScrollingText
-                    text={`${track.title} • ${track.uploader}`}
-                    className="font-medium"
-                    speed={50}
-                />
+            <div className="flex-1 min-w-0 text-[13px] text-foreground font-medium truncate">
+                {track.title} • {track.uploader}
             </div>
 
             {/* Divider */}
@@ -104,7 +99,7 @@ export function MiniPlayer({ track, isPlaying, isLoading, onExpand }: MiniPlayer
                 className="w-6 h-6 flex items-center justify-center hover-macos-button rounded flex-shrink-0"
                 aria-label="Expand player"
             >
-                <ChevronDown className="w-[11px] h-[11px] text-muted-foreground" />
+                <Maximize2 className="w-[11px] h-[11px] text-muted-foreground" />
             </button>
         </div>
     )

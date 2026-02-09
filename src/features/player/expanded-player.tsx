@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Pause, SkipBack, SkipForward, ChevronDown, MinusCircle, PlusCircle, Loader2 } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Minimize2, MinusCircle, PlusCircle, Loader2 } from 'lucide-react'
 import { togglePlayPause, playPrevious, playNext, seekTo, setPlaybackSpeed, formatTime, type AudioState } from '@/lib/tauri'
 import { ScrollingText } from '@/components/scrolling-text'
 
@@ -114,7 +114,7 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                                 <ScrollingText
                                     text={audioState.current_track.title}
                                     className="text-[15px] font-semibold text-foreground"
-                                    speed={50}
+                                    speed={30}
                                 />
                             </div>
                             <p className="text-[13px] text-muted-foreground truncate">
@@ -123,10 +123,10 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                         </div>
                         <button
                             onClick={onCollapse}
-                            className="w-8 h-8 flex items-center justify-center hover-macos-button rounded-full flex-shrink-0"
+                            className="w-8 h-8 flex items-center justify-center hover-macos-button rounded flex-shrink-0"
                             aria-label="Collapse player"
                         >
-                            <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                            <Minimize2 className="w-3 h-3 text-muted-foreground" />
                         </button>
                     </div>
                 )}

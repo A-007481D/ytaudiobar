@@ -9,14 +9,15 @@ interface ScrollingTextProps {
 export function ScrollingText({ text, className = '', speed = 50 }: ScrollingTextProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const textRef = useRef<HTMLSpanElement>(null)
+    const measureRef = useRef<HTMLSpanElement>(null)
     const [shouldScroll, setShouldScroll] = useState(false)
     const [duration, setDuration] = useState(10)
 
     useEffect(() => {
         const checkOverflow = () => {
-            if (containerRef.current && textRef.current) {
+            if (containerRef.current && measureRef.current) {
                 const containerWidth = containerRef.current.offsetWidth
-                const textWidth = textRef.current.offsetWidth
+                const textWidth = measureRef.current.offsetWidth
 
                 if (textWidth > containerWidth) {
                     setShouldScroll(true)
@@ -42,16 +43,25 @@ export function ScrollingText({ text, className = '', speed = 50 }: ScrollingTex
             ref={containerRef}
             className={`relative overflow-hidden whitespace-nowrap ${className}`}
         >
+            {/* Hidden element to measure true text width */}
+            <span
+                ref={measureRef}
+                className="inline-block whitespace-nowrap invisible absolute"
+                aria-hidden="true"
+            >
+                {text}
+            </span>
+
             {shouldScroll ? (
                 <span
                     ref={textRef}
                     className="inline-block whitespace-nowrap"
                     style={{
-                        animation: `marquee ${duration}s linear infinite`,
+                        animation: `marquee ${duration}s linear 1s infinite`,
                     }}
                 >
-                    {text} {/* Duplicate text for seamless loop */}
-                    <span className="inline-block ml-[30px]">{text}</span>
+                    {text}
+                    <span className="inline-block mx-[30px]">{text}</span>
                 </span>
             ) : (
                 <span ref={textRef} className="truncate block">
