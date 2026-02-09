@@ -48,25 +48,31 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Build and sign app
+      - name: Build app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
-      - name: Create signed updater bundles (Windows)
+      - name: Create signed updater archives (Windows)
         if: matrix.platform == 'windows'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        shell: bash
+        shell: pwsh
         run: |
           cd src-tauri/target/release/bundle/msi
-          for msi in *.msi; do
-            npx tauri signer sign "$msi" --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
-          done
+          Get-ChildItem *.msi | ForEach-Object {
+            $msi = $_.Name
+            $zip = "$msi.zip"
+            Write-Host "Creating $zip"
+            Compress-Archive -Path $msi -DestinationPath $zip -Force
+            Write-Host "Signing $zip"
+            npx @tauri-apps/cli signer sign $zip
+          }
+          Get-ChildItem
 
-      - name: Create signed updater bundles (Linux)
+      - name: Create signed updater archives (Linux)
         if: matrix.platform == 'linux'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -75,8 +81,12 @@ jobs:
         run: |
           cd src-tauri/target/release/bundle/appimage
           for appimage in *.AppImage; do
-            npx tauri signer sign "$appimage" --private-key "$TAURI_SIGNING_PRIVATE_KEY" --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+            echo "Creating ${appimage}.tar.gz"
+            tar czf "${appimage}.tar.gz" "$appimage"
+            echo "Signing ${appimage}.tar.gz"
+            npx @tauri-apps/cli signer sign "${appimage}.tar.gz"
           done
+          ls -la
 
       - name: Upload Release Assets (Windows)
         if: matrix.platform == 'windows'
@@ -98,8 +108,8 @@ jobs:
         with:
           files: |
             src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
-            src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+            src-tauri/target/release/bundle/appimage/*.tar.gz
+            src-tauri/target/release/bundle/appimage/*.tar.gz.sig
             src-tauri/target/release/bundle/deb/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

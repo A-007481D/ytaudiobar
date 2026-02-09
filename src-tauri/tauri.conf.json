@@ -1,6 +1,6 @@
 {
   "productName": "YTAudioBar",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "identifier": "com.ytaudiobar.app",
   "build": {
     "beforeDevCommand": "npm run dev",
