@@ -48,6 +48,25 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Verify signing secrets exist
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            echo "❌ ERROR: TAURI_SIGNING_PRIVATE_KEY secret is not set!"
+            exit 1
+          else
+            echo "✅ TAURI_SIGNING_PRIVATE_KEY secret exists (length: ${#TAURI_SIGNING_PRIVATE_KEY})"
+          fi
+
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}" ]; then
+            echo "❌ ERROR: TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret is not set!"
+            exit 1
+          else
+            echo "✅ TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret exists"
+          fi
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
       - name: Build app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -58,6 +77,10 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
+          # Write private key to temp file
+          $keyFile = New-TemporaryFile
+          "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" | Out-File -FilePath $keyFile -Encoding utf8 -NoNewline
+
           cd src-tauri/target/release/bundle/msi
           Get-ChildItem *.msi | ForEach-Object {
             $msi = $_.Name
@@ -65,25 +88,31 @@ jobs:
             Write-Host "Creating $zip"
             Compress-Archive -Path $msi -DestinationPath $zip -Force
             Write-Host "Signing $zip"
-            $env:TAURI_SIGNING_PRIVATE_KEY = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-            $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
-            npx @tauri-apps/cli signer sign $zip
+            npx @tauri-apps/cli signer sign $zip --private-key-path $keyFile --password "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
           }
+
+          # Clean up key file
+          Remove-Item $keyFile -Force
           Get-ChildItem
 
       - name: Create signed updater archives (Linux)
         if: matrix.platform == 'linux'
         shell: bash
         run: |
+          # Write private key to temp file
+          KEY_FILE=$(mktemp)
+          echo -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > "$KEY_FILE"
+
           cd src-tauri/target/release/bundle/appimage
-          export TAURI_SIGNING_PRIVATE_KEY="${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
           for appimage in *.AppImage; do
             echo "Creating ${appimage}.tar.gz"
             tar czf "${appimage}.tar.gz" "$appimage"
             echo "Signing ${appimage}.tar.gz"
-            npx @tauri-apps/cli signer sign "${appimage}.tar.gz"
+            npx @tauri-apps/cli signer sign "${appimage}.tar.gz" --private-key-path "$KEY_FILE" --password "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
           done
+
+          # Clean up key file
+          rm -f "$KEY_FILE"
           ls -la
 
       - name: Upload Release Assets (Windows)
