@@ -495,6 +495,16 @@ async fn check_for_updates_silently(app: tauri::AppHandle) {
 
 #[tokio::main]
 async fn main() {
+    // Force X11 backend on Linux - Wayland doesn't support:
+    // - Window transparency (needed for rounded corners)
+    // - Programmatic window positioning
+    // - data-tauri-drag-region (custom titlebar dragging)
+    // XWayland provides full compatibility for all these features.
+    #[cfg(target_os = "linux")]
+    {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+
     // Initialize database
     let db = DatabaseManager::new()
         .await
@@ -514,29 +524,14 @@ async fn main() {
     };
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .setup(move |app| {
-            // Position window based on OS
-            if let Some(window) = app.get_webview_window("main") {
-                use tauri_plugin_positioner::{Position, WindowExt};
-
-                // On Linux, position in top-right corner (near system tray)
-                #[cfg(target_os = "linux")]
-                {
-                    let _ = window.move_window(Position::TopRight);
-                }
-
-                // On Windows, keep existing taskbar positioning
-                #[cfg(target_os = "windows")]
-                {
-                    // Windows positioning is handled by tray icon click event
-                }
-            }
+            // Window positioning is handled later in setup with manual calculations
+            // for better compatibility across different environments
 
             // Set app handle in audio manager for events
             let handle = app.handle().clone();
@@ -602,9 +597,25 @@ async fn main() {
             let show_item = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-            // Create tray icon
+            // Create tray icon with Linux fallback
+            let tray_icon = if cfg!(target_os = "linux") {
+                // On Linux, use the PNG icon explicitly
+                match app.default_window_icon() {
+                    Some(icon) => icon.clone(),
+                    None => {
+                        // Fallback: load icon from file
+                        let icon_path = app.path().resolve("icons/128x128.png", tauri::path::BaseDirectory::Resource)
+                            .expect("Failed to resolve icon path");
+                        tauri::image::Image::from_path(icon_path)
+                            .expect("Failed to load tray icon")
+                    }
+                }
+            } else {
+                app.default_window_icon().unwrap().clone()
+            };
+
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .menu(&menu)
                 .menu_on_left_click(false)
                 .tooltip("YTAudioBar")
@@ -654,33 +665,27 @@ async fn main() {
             // Get the main window
             let window = app.get_webview_window("main").unwrap();
 
-            // Position window near system tray (bottom-right on Windows, top-right on Linux)
-            #[cfg(target_os = "windows")]
+            // Position window near system tray
             {
                 use tauri::PhysicalPosition;
                 if let Some(monitor) = window.current_monitor()? {
                     let screen_size = monitor.size();
                     if let Ok(window_size) = window.outer_size() {
-                        // Position in bottom-right corner - close to right edge, more space from taskbar
-                        let x = screen_size.width as i32 - window_size.width as i32 - 5;
-                        let y = screen_size.height as i32 - window_size.height as i32 - 80;
+                        #[cfg(target_os = "windows")]
+                        {
+                            // Bottom-right corner on Windows (near taskbar)
+                            let x = screen_size.width as i32 - window_size.width as i32 - 5;
+                            let y = screen_size.height as i32 - window_size.height as i32 - 80;
+                            let _ = window.set_position(PhysicalPosition::new(x, y));
+                        }
 
-                        let _ = window.set_position(PhysicalPosition::new(x, y));
-                    }
-                }
-            }
-
-            #[cfg(target_os = "linux")]
-            {
-                use tauri::PhysicalPosition;
-                if let Some(monitor) = window.current_monitor()? {
-                    let screen_size = monitor.size();
-                    if let Ok(window_size) = window.outer_size() {
-                        // Position in top-right corner with some padding
-                        let x = screen_size.width as i32 - window_size.width as i32 - 10;
-                        let y = 50;
-
-                        let _ = window.set_position(PhysicalPosition::new(x, y));
+                        #[cfg(target_os = "linux")]
+                        {
+                            // Top-right corner on Linux (near system tray)
+                            let x = screen_size.width as i32 - window_size.width as i32 - 30;
+                            let y = 40;
+                            let _ = window.set_position(PhysicalPosition::new(x, y));
+                        }
                     }
                 }
             }

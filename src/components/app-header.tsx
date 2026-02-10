@@ -7,13 +7,20 @@ interface AppHeaderProps {
     onMusicModeToggle: () => void
 }
 
-export function AppHeader({ query, onQueryChange, isMusicMode, onMusicModeToggle }: AppHeaderProps) {
+export function AppHeader({
+    query,
+    onQueryChange,
+    isMusicMode,
+    onMusicModeToggle
+}: AppHeaderProps) {
     return (
         <div className="flex-shrink-0 bg-background">
-            {/* App Title Section */}
+            {/* App Title Section - Draggable area */}
             <div className="px-4 pt-4 pb-3 flex items-center gap-2">
                 <Music className="w-5 h-5 text-foreground" />
-                <h1 className="text-[15px] font-semibold text-foreground">YTAudioBar</h1>
+                <h1 className="text-[15px] font-semibold text-foreground">
+                    YTAudioBar
+                </h1>
             </div>
 
             {/* Search Bar Section */}
@@ -23,7 +30,11 @@ export function AppHeader({ query, onQueryChange, isMusicMode, onMusicModeToggle
                         type="text"
                         value={query}
                         onChange={(e) => onQueryChange(e.target.value)}
-                        placeholder={isMusicMode ? 'Search YouTube Music...' : 'Search YouTube...'}
+                        placeholder={
+                            isMusicMode
+                                ? 'Search YouTube Music...'
+                                : 'Search YouTube...'
+                        }
                         className="w-full px-3 py-2 pr-24 bg-secondary border-none rounded-lg text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[var(--macos-blue)]"
                     />
 

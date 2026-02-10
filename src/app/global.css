@@ -121,15 +121,21 @@
         /* For native desktop app feeling disallow text selection. */
         @apply select-none;
 
+        /* Transparent background needed for rounded corners */
+        background: transparent;
+
         /* Disable overscroll/bouncing */
         @apply h-full overscroll-none;
 
         /* Consistent font rendering across platforms */
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-family:
+            -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+            'Helvetica Neue', Arial, sans-serif;
     }
     body {
-        @apply bg-background text-foreground;
-        /* Add border-radius for frameless window (Linux/Windows) */
+        @apply text-foreground;
+        /* Transparent body allows rounded corners to show through */
+        background: transparent;
         border-radius: 12px;
         overflow: hidden;
     }
@@ -164,11 +170,11 @@
     }
 
     /* Remove default input styling on Linux */
-    input[type="text"],
-    input[type="search"],
-    input[type="email"],
-    input[type="number"],
-    input[type="password"] {
+    input[type='text'],
+    input[type='search'],
+    input[type='email'],
+    input[type='number'],
+    input[type='password'] {
         -webkit-appearance: none;
         -moz-appearance: none;
         appearance: none;
@@ -184,14 +190,14 @@
     }
 
     /* Consistent range input styling across all browsers */
-    input[type="range"] {
+    input[type='range'] {
         -webkit-appearance: none;
         -moz-appearance: none;
         appearance: none;
     }
 
     /* Firefox range thumb */
-    input[type="range"]::-moz-range-thumb {
+    input[type='range']::-moz-range-thumb {
         width: 12px;
         height: 12px;
         border-radius: 50%;
@@ -202,7 +208,7 @@
     }
 
     /* Firefox range track */
-    input[type="range"]::-moz-range-track {
+    input[type='range']::-moz-range-track {
         background: transparent;
         border: none;
     }

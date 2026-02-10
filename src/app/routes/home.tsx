@@ -43,14 +43,20 @@ export function HomePage() {
     const [isInitializing, setIsInitializing] = useState(true)
 
     // Get Zustand store actions
-    const { setCurrentTrack: setStoreTrack, setIsPlaying: setStorePlaying, setLoadingTrack } = usePlayerStore()
+    const {
+        setCurrentTrack: setStoreTrack,
+        setIsPlaying: setStorePlaying,
+        setLoadingTrack
+    } = usePlayerStore()
 
     // Search state (lifted from SearchTab to be accessible from Header)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMusicMode, setIsMusicMode] = useState(false)
     const [searchResults, setSearchResults] = useState<YTVideoInfo[]>([])
     const [isSearching, setIsSearching] = useState(false)
-    const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+    const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
+        null
+    )
     const searchRequestIdRef = useRef(0) // Track current search request to cancel stale requests
 
     // Initialize YTDLP
@@ -159,7 +165,10 @@ export function HomePage() {
                 if (audioState) {
                     const newPosition = Math.max(
                         0,
-                        Math.min(audioState.current_position + offset, audioState.duration)
+                        Math.min(
+                            audioState.current_position + offset,
+                            audioState.duration
+                        )
                     )
                     seekTo(newPosition).catch(console.error)
                 }
@@ -207,7 +216,9 @@ export function HomePage() {
         searchRequestIdRef.current += 1
         const currentRequestId = searchRequestIdRef.current
 
-        console.log(`🔍 Starting search request #${currentRequestId} for: "${query}"`)
+        console.log(
+            `🔍 Starting search request #${currentRequestId} for: "${query}"`
+        )
 
         setIsSearching(true)
         // Auto-switch to search tab when user starts searching
@@ -217,11 +228,15 @@ export function HomePage() {
 
             // Only use results if this is still the current request
             if (searchRequestIdRef.current === currentRequestId) {
-                console.log(`✅ Search request #${currentRequestId} completed with ${results.length} results`)
+                console.log(
+                    `✅ Search request #${currentRequestId} completed with ${results.length} results`
+                )
                 setSearchResults(results)
                 setIsSearching(false)
             } else {
-                console.log(`🚫 Ignoring stale search request #${currentRequestId} (current: #${searchRequestIdRef.current})`)
+                console.log(
+                    `🚫 Ignoring stale search request #${currentRequestId} (current: #${searchRequestIdRef.current})`
+                )
             }
         } catch (error) {
             // Only handle error if this is still the current request
@@ -230,7 +245,9 @@ export function HomePage() {
                 setSearchResults([])
                 setIsSearching(false)
             } else {
-                console.log(`🚫 Ignoring error from stale search request #${currentRequestId}`)
+                console.log(
+                    `🚫 Ignoring error from stale search request #${currentRequestId}`
+                )
             }
         }
     }
@@ -240,14 +257,16 @@ export function HomePage() {
             <div className="flex h-screen items-center justify-center bg-background">
                 <div className="text-center">
                     <div className="text-2xl mb-2">⏳</div>
-                    <div className="text-sm text-muted-foreground">Initializing...</div>
+                    <div className="text-sm text-muted-foreground">
+                        Initializing...
+                    </div>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="flex flex-col h-screen bg-background select-none rounded-[12px] overflow-hidden">
+        <div className="flex flex-col h-screen bg-background select-none rounded-[12px] overflow-hidden border border-white/10">
             {/* Header - App Title + Search Bar */}
             <AppHeader
                 query={searchQuery}
@@ -266,11 +285,13 @@ export function HomePage() {
                             isLoading={audioState?.is_loading || false}
                             onExpand={() => setIsExpanded(true)}
                         />
-                    ) : audioState && (
-                        <ExpandedPlayer
-                            audioState={audioState}
-                            onCollapse={() => setIsExpanded(false)}
-                        />
+                    ) : (
+                        audioState && (
+                            <ExpandedPlayer
+                                audioState={audioState}
+                                onCollapse={() => setIsExpanded(false)}
+                            />
+                        )
                     )}
                 </>
             )}
