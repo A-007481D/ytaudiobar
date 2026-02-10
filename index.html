@@ -10,5 +10,9 @@
     <body>
         <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
+        <script>
+            // Disable context menu for native desktop app feel
+            document.addEventListener('contextmenu', (e) => e.preventDefault())
+        </script>
     </body>
 </html>
