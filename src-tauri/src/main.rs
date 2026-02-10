@@ -530,6 +530,9 @@ fn integrate_appimage_to_system() {
             return;
         }
 
+        // Use AppImage path as icon - AppImages have embedded icons that desktop environments can extract
+        let icon_value = appimage_path.clone();
+
         // Create desktop entry
         let desktop_content = format!(
             "[Desktop Entry]\n\
@@ -537,12 +540,13 @@ fn integrate_appimage_to_system() {
              Name=YTAudioBar\n\
              Comment=YouTube Audio Player\n\
              Exec={}\n\
-             Icon=ytaudiobar\n\
+             Icon={}\n\
              Categories=AudioVideo;Audio;Player;\n\
              Terminal=false\n\
              StartupWMClass=YTAudioBar\n\
              X-AppImage-Version={}\n",
             appimage_path,
+            icon_value,
             env!("CARGO_PKG_VERSION")
         );
 
@@ -551,7 +555,7 @@ fn integrate_appimage_to_system() {
             return;
         }
 
-        // Update desktop database (optional, for immediate menu refresh)
+        // Update desktop database
         let _ = std::process::Command::new("update-desktop-database")
             .arg(apps_dir)
             .output();
