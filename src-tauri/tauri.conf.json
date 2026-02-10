@@ -21,15 +21,15 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "nsis": {
+        "installMode": "currentUser"
+      }
     },
     "linux": {
       "deb": {
         "depends": []
       }
-    },
-    "nsis": {
-      "perMachine": false
     }
   },
   "plugins": {
