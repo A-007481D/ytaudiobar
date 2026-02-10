@@ -514,12 +514,30 @@ async fn main() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .setup(move |app| {
+            // Position window based on OS
+            if let Some(window) = app.get_webview_window("main") {
+                use tauri_plugin_positioner::{Position, WindowExt};
+
+                // On Linux, position in top-right corner (near system tray)
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = window.move_window(Position::TopRight);
+                }
+
+                // On Windows, keep existing taskbar positioning
+                #[cfg(target_os = "windows")]
+                {
+                    // Windows positioning is handled by tray icon click event
+                }
+            }
+
             // Set app handle in audio manager for events
             let handle = app.handle().clone();
             let audio_clone = Arc::clone(&audio_manager);

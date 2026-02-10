@@ -89,7 +89,9 @@
             "updater:allow-check",
             "updater:allow-download",
             "updater:allow-install",
-            "updater:allow-download-and-install"
+            "updater:allow-download-and-install",
+            "positioner:default",
+            "positioner:allow-move-window"
           ]
         }
       ]

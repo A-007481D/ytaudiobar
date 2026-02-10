@@ -29,6 +29,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 souvlaki = "0.7"
 raw-window-handle = "0.6"
+tauri-plugin-positioner = "2"
 
 [features]
 default = ["custom-protocol"]
