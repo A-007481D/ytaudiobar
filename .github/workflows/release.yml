@@ -87,7 +87,7 @@ jobs:
             $zip = "$msi.zip"
             Write-Host "Creating $zip with standard compression"
             # Use 7z to create zip with Deflate compression (compatible with all systems)
-            & "C:\Program Files\7-Zip\7z.exe" a -tzip -mm=Deflate $zip $msi
+            & "C:\Program Files\7-Zip\7z.exe" a -tzip -mx=0 $zip $msi
             Write-Host "Signing $zip"
             npx @tauri-apps/cli signer sign $zip --private-key-path $keyFile --password "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
           }
