@@ -530,8 +530,46 @@ fn integrate_appimage_to_system() {
             return;
         }
 
-        // Use AppImage path as icon - AppImages have embedded icons that desktop environments can extract
-        let icon_value = appimage_path.clone();
+        // Install icon - extract from AppImage and copy to user icons
+        // Try to access the icon from the mounted AppImage filesystem
+        let mut icon_installed = false;
+
+        if let Ok(appdir) = std::env::var("APPDIR") {
+            // Try multiple possible icon locations inside AppImage (check higher resolutions first)
+            let possible_icons = vec![
+                // 256x256 (recommended resolution for AppImages)
+                (format!("{}/usr/share/icons/hicolor/256x256/apps/ytaudiobar.png", appdir), "256x256"),
+                (format!("{}/icons/256x256.png", appdir), "256x256"),
+                // 128x128 (Tauri default)
+                (format!("{}/icons/128x128.png", appdir), "128x128"),
+                (format!("{}/usr/share/icons/hicolor/128x128/apps/ytaudiobar.png", appdir), "128x128"),
+                // Fallback to .DirIcon (AppImage standard)
+                (format!("{}/.DirIcon", appdir), "128x128"),
+            ];
+
+            for (source, resolution) in possible_icons {
+                if std::path::Path::new(&source).exists() {
+                    let icon_dir = format!("{}/.local/share/icons/hicolor/{}/apps", home, resolution);
+                    let icon_dest = format!("{}/ytaudiobar.png", icon_dir);
+
+                    if std::fs::create_dir_all(&icon_dir).is_ok() {
+                        if std::fs::copy(&source, &icon_dest).is_ok() {
+                            println!("✅ Icon installed from {} to {}", source, icon_dest);
+                            icon_installed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Determine icon value - use name if we installed it, otherwise use AppImage path
+        let icon_value = if icon_installed {
+            "ytaudiobar".to_string()
+        } else {
+            println!("⚠️ Could not extract icon from AppImage, using AppImage path as fallback");
+            appimage_path.clone()
+        };
 
         // Create desktop entry
         let desktop_content = format!(
@@ -553,6 +591,15 @@ fn integrate_appimage_to_system() {
         if let Err(e) = std::fs::write(&desktop_file, desktop_content) {
             eprintln!("⚠️ Failed to create desktop entry: {}", e);
             return;
+        }
+
+        // Update icon cache
+        if icon_installed {
+            let _ = std::process::Command::new("gtk-update-icon-cache")
+                .arg(format!("{}/.local/share/icons/hicolor", home))
+                .arg("-f")
+                .arg("-t")
+                .output();
         }
 
         // Update desktop database
