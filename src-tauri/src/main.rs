@@ -531,36 +531,35 @@ fn integrate_appimage_to_system() {
         }
 
         // Install icon - extract from AppImage and copy to user icons
-        // Try to access the icon from the mounted AppImage filesystem
+        // Extract YTAudioBar.png from AppImage (not .DirIcon which is a broken symlink)
         let mut icon_installed = false;
+        let icon_dir = format!("{}/.local/share/icons/hicolor/128x128/apps", home);
+        let icon_dest = format!("{}/ytaudiobar.png", icon_dir);
 
-        if let Ok(appdir) = std::env::var("APPDIR") {
-            // Try multiple possible icon locations inside AppImage (check higher resolutions first)
-            let possible_icons = vec![
-                // 256x256 (recommended resolution for AppImages)
-                (format!("{}/usr/share/icons/hicolor/256x256/apps/ytaudiobar.png", appdir), "256x256"),
-                (format!("{}/icons/256x256.png", appdir), "256x256"),
-                // 128x128 (Tauri default)
-                (format!("{}/icons/128x128.png", appdir), "128x128"),
-                (format!("{}/usr/share/icons/hicolor/128x128/apps/ytaudiobar.png", appdir), "128x128"),
-                // Fallback to .DirIcon (AppImage standard)
-                (format!("{}/.DirIcon", appdir), "128x128"),
-            ];
+        let extract_result = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("{} --appimage-extract YTAudioBar.png 2>/dev/null", appimage_path))
+            .current_dir("/tmp")
+            .output();
 
-            for (source, resolution) in possible_icons {
-                if std::path::Path::new(&source).exists() {
-                    let icon_dir = format!("{}/.local/share/icons/hicolor/{}/apps", home, resolution);
-                    let icon_dest = format!("{}/ytaudiobar.png", icon_dir);
-
+        if let Ok(output) = extract_result {
+            if output.status.success() {
+                let extracted_icon = "/tmp/squashfs-root/YTAudioBar.png";
+                if std::path::Path::new(extracted_icon).exists() {
                     if std::fs::create_dir_all(&icon_dir).is_ok() {
-                        if std::fs::copy(&source, &icon_dest).is_ok() {
-                            println!("✅ Icon installed from {} to {}", source, icon_dest);
+                        if std::fs::copy(extracted_icon, &icon_dest).is_ok() {
+                            println!("✅ Icon extracted and installed successfully to {}", icon_dest);
                             icon_installed = true;
-                            break;
                         }
                     }
+                    // Clean up extracted files
+                    let _ = std::fs::remove_dir_all("/tmp/squashfs-root");
                 }
             }
+        }
+
+        if !icon_installed {
+            eprintln!("⚠️ Could not extract icon from AppImage, using AppImage path as fallback");
         }
 
         // Determine icon value - use name if we installed it, otherwise use AppImage path
