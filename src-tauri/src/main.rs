@@ -690,6 +690,9 @@ async fn main() {
                 }
             }
 
+            // Show and focus window on first launch so auto-hide on blur works
+            let _ = window.show().and_then(|_| window.set_focus());
+
             Ok(())
         })
         .on_window_event(|window, event| match event {
