@@ -444,9 +444,9 @@ async fn check_for_updates_silently(app: tauri::AppHandle) {
     // On Linux, auto-update only works with AppImage, not .deb
     #[cfg(target_os = "linux")]
     {
-        let exe_path = std::env::current_exe().unwrap_or_default();
-        let exe_str = exe_path.to_string_lossy();
-        if !exe_str.contains("AppImage") && !exe_str.contains("appimage") {
+        // Check for APPIMAGE environment variable (set by AppImage runtime)
+        // This variable contains the path to the .AppImage file and is only set when running from AppImage
+        if std::env::var("APPIMAGE").is_err() {
             println!("ℹ️ Skipping auto-update: .deb installations cannot be updated automatically.");
             println!("   To get auto-updates, use the AppImage version instead.");
             return;
