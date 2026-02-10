@@ -66,35 +66,61 @@ export const searchYoutube = (query: string, musicMode: boolean) =>
 export const cancelSearch = () => invoke<void>('cancel_search')
 
 // YTDLP
-export const checkYtdlpInstalled = () => invoke<boolean>('check_ytdlp_installed')
+export const checkYtdlpInstalled = () =>
+    invoke<boolean>('check_ytdlp_installed')
 export const installYtdlp = () => invoke<void>('install_ytdlp')
 export const getYtdlpVersion = () => invoke<string>('get_ytdlp_version')
+export const checkYtdlpUpdate = () =>
+    invoke<string | null>('check_ytdlp_update')
+
+// Ffmpeg
+export const checkFfmpegAvailable = () =>
+    invoke<boolean>('check_ffmpeg_available')
+export const installFfmpeg = () => invoke<void>('install_ffmpeg')
+
+// Dependency progress
+export interface DepProgress {
+    dependency: string
+    downloaded: number
+    total: number
+}
+export const listenToDepProgress = (
+    callback: (progress: DepProgress) => void
+) => listen<DepProgress>('dep-progress', (event) => callback(event.payload))
 
 // Playback
-export const playTrack = (track: YTVideoInfo) => invoke<void>('play_track', { track })
+export const playTrack = (track: YTVideoInfo) =>
+    invoke<void>('play_track', { track })
 export const togglePlayPause = () => invoke<void>('toggle_play_pause')
 export const pausePlayback = () => invoke<void>('pause_playback')
 export const stopPlayback = () => invoke<void>('stop_playback')
-export const seekTo = (position: number) => invoke<void>('seek_to', { position })
-export const setVolume = (volume: number) => invoke<void>('set_volume', { volume })
-export const setPlaybackSpeed = (rate: number) => invoke<void>('set_playback_speed', { rate })
+export const seekTo = (position: number) =>
+    invoke<void>('seek_to', { position })
+export const setVolume = (volume: number) =>
+    invoke<void>('set_volume', { volume })
+export const setPlaybackSpeed = (rate: number) =>
+    invoke<void>('set_playback_speed', { rate })
 export const playNext = () => invoke<YTVideoInfo | null>('play_next')
 export const playPrevious = () => invoke<YTVideoInfo | null>('play_previous')
 export const getAudioState = () => invoke<AudioState>('get_audio_state')
 
 // Queue
-export const addToQueue = (track: YTVideoInfo) => invoke<void>('add_to_queue', { track })
+export const addToQueue = (track: YTVideoInfo) =>
+    invoke<void>('add_to_queue', { track })
 export const getQueue = () => invoke<YTVideoInfo[]>('get_queue')
 export const clearQueue = () => invoke<void>('clear_queue')
 export const toggleShuffle = () => invoke<boolean>('toggle_shuffle')
 export const cycleRepeatMode = () => invoke<RepeatMode>('cycle_repeat_mode')
 export const getQueueInfo = () => invoke<string>('get_queue_info')
-export const reorderQueue = (newQueue: YTVideoInfo[]) => invoke<void>('reorder_queue', { newQueue })
+export const reorderQueue = (newQueue: YTVideoInfo[]) =>
+    invoke<void>('reorder_queue', { newQueue })
 
 // Playlists
 export const getAllPlaylists = () => invoke<Playlist[]>('get_all_playlists')
-export const createPlaylist = (name: string) => invoke<string>('create_playlist', { name })
-export const deletePlaylist = (id: string) => invoke<void>('delete_playlist', { id })
+export const createPlaylist = (name: string) =>
+    invoke<string>('create_playlist', { name })
+export const deletePlaylist = (id: string) =>
+    invoke<void>('delete_playlist', { id })
 export const getPlaylistTracks = (playlistId: string) =>
     invoke<Track[]>('get_playlist_tracks', { playlistId })
 export const addTrackToPlaylist = (track: YTVideoInfo, playlistId: string) =>
@@ -115,8 +141,7 @@ export const getActiveDownloads = () =>
     invoke<DownloadProgress[]>('get_active_downloads')
 export const getDownloadedTracks = () =>
     invoke<DownloadedTrack[]>('get_downloaded_tracks')
-export const getStorageUsed = () =>
-    invoke<number>('get_storage_used')
+export const getStorageUsed = () => invoke<number>('get_storage_used')
 export const isTrackDownloaded = (videoId: string) =>
     invoke<boolean>('is_track_downloaded', { videoId })
 export const deleteDownload = (videoId: string) =>
@@ -129,20 +154,35 @@ export const getDownloadsDirectory = () =>
     invoke<string>('get_downloads_directory')
 export const setDownloadsDirectory = (path: string) =>
     invoke<void>('set_downloads_directory', { path })
-export const getAudioQuality = () =>
-    invoke<string>('get_audio_quality')
+export const getAudioQuality = () => invoke<string>('get_audio_quality')
 export const setAudioQuality = (quality: string) =>
     invoke<void>('set_audio_quality', { quality })
-export const getAppVersion = () =>
-    invoke<string>('get_app_version')
+export const getAppVersion = () => invoke<string>('get_app_version')
 
 // Media Keys
-export const updateMediaMetadata = (title: string, artist: string, duration: number, coverUrl: string | null = null) =>
-    invoke<void>('update_media_metadata', { title, artist, duration, cover_url: coverUrl })
-export const updateMediaPlaybackState = (isPlaying: boolean, position: number, duration: number) =>
-    invoke<void>('update_media_playback_state', { isPlaying, position, duration })
-export const clearMediaInfo = () =>
-    invoke<void>('clear_media_info')
+export const updateMediaMetadata = (
+    title: string,
+    artist: string,
+    duration: number,
+    coverUrl: string | null = null
+) =>
+    invoke<void>('update_media_metadata', {
+        title,
+        artist,
+        duration,
+        cover_url: coverUrl
+    })
+export const updateMediaPlaybackState = (
+    isPlaying: boolean,
+    position: number,
+    duration: number
+) =>
+    invoke<void>('update_media_playback_state', {
+        isPlaying,
+        position,
+        duration
+    })
+export const clearMediaInfo = () => invoke<void>('clear_media_info')
 
 // ===== EVENTS =====
 export const listenToPlaybackState = (
@@ -183,8 +223,12 @@ export const listenToMediaKeySeek = (callback: (offset: number) => void) => {
     return listen<number>('media-key-seek', (event) => callback(event.payload))
 }
 
-export const listenToMediaKeySeekTo = (callback: (position: number) => void) => {
-    return listen<number>('media-key-seek-to', (event) => callback(event.payload))
+export const listenToMediaKeySeekTo = (
+    callback: (position: number) => void
+) => {
+    return listen<number>('media-key-seek-to', (event) =>
+        callback(event.payload)
+    )
 }
 
 export const listenToMediaKeyStop = (callback: () => void) => {

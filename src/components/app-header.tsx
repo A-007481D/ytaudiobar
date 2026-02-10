@@ -1,4 +1,4 @@
-import { Music, X } from 'lucide-react'
+import { X, Music } from 'lucide-react'
 
 interface AppHeaderProps {
     query: string
@@ -17,7 +17,7 @@ export function AppHeader({
         <div className="flex-shrink-0 bg-background">
             {/* App Title Section - Draggable area */}
             <div className="px-4 pt-4 pb-3 flex items-center gap-2">
-                <Music className="w-5 h-5 text-foreground" />
+                <img src="/icon.png" alt="YTAudioBar" className="w-5 h-5" />
                 <h1 className="text-[15px] font-semibold text-foreground">
                     YTAudioBar
                 </h1>

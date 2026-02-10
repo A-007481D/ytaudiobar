@@ -29,6 +29,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
 souvlaki = "0.7"
 raw-window-handle = "0.6"
+zip = "2.1"
+futures-util = "0.3"
 
 
 [features]

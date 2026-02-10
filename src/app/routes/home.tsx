@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppHeader } from '@/components/app-header'
+import { DependencyLoader } from '@/components/dependency-loader'
 import { MiniPlayer } from '@/features/player/mini-player'
 import { ExpandedPlayer } from '@/features/player/expanded-player'
 import { SearchTab } from '@/features/search/search-tab'
@@ -11,6 +12,9 @@ import { usePlayerStore } from '@/stores/player-store'
 import {
     checkYtdlpInstalled,
     installYtdlp,
+    checkFfmpegAvailable,
+    installFfmpeg,
+    listenToDepProgress,
     listenToPlaybackState,
     searchYoutube,
     cancelSearch,
@@ -41,6 +45,12 @@ export function HomePage() {
     const [isPlaying, setIsPlaying] = useState(false)
     const [audioState, setAudioState] = useState<AudioState | null>(null)
     const [isInitializing, setIsInitializing] = useState(true)
+    const [loadingStatus, setLoadingStatus] = useState<
+        'checking' | 'downloading-ytdlp' | 'downloading-ffmpeg' | 'complete'
+    >('checking')
+    const [loadingProgress, setLoadingProgress] = useState(0)
+    const needsYtdlpRef = useRef(false)
+    const needsFfmpegRef = useRef(false)
 
     // Get Zustand store actions
     const {
@@ -59,21 +69,67 @@ export function HomePage() {
     )
     const searchRequestIdRef = useRef(0) // Track current search request to cancel stale requests
 
-    // Initialize YTDLP
+    // Initialize dependencies (yt-dlp + ffmpeg)
     useEffect(() => {
-        const initYtdlp = async () => {
+        const initDependencies = async () => {
             try {
-                const isInstalled = await checkYtdlpInstalled()
-                if (!isInstalled) {
+                // Check what needs installing
+                const ytdlpInstalled = await checkYtdlpInstalled()
+                const ffmpegAvailable = await checkFfmpegAvailable()
+
+                needsYtdlpRef.current = !ytdlpInstalled
+                needsFfmpegRef.current = !ffmpegAvailable
+
+                // If everything is already installed, skip immediately
+                if (ytdlpInstalled && ffmpegAvailable) {
+                    setIsInitializing(false)
+                    return
+                }
+
+                // Listen for real download progress events
+                const unlisten = await listenToDepProgress((progress) => {
+                    if (progress.total === 0) return
+
+                    const depPercent =
+                        (progress.downloaded / progress.total) * 100
+                    const bothNeeded =
+                        needsYtdlpRef.current && needsFfmpegRef.current
+
+                    if (progress.dependency === 'ytdlp') {
+                        // yt-dlp: 0-50% if both needed, 0-100% if only ytdlp
+                        const overall = bothNeeded
+                            ? depPercent * 0.5
+                            : depPercent
+                        setLoadingProgress(overall)
+                    } else if (progress.dependency === 'ffmpeg') {
+                        // ffmpeg: 50-100% if both needed, 0-100% if only ffmpeg
+                        const overall = bothNeeded
+                            ? 50 + depPercent * 0.5
+                            : depPercent
+                        setLoadingProgress(overall)
+                    }
+                })
+
+                // Install yt-dlp if needed
+                if (!ytdlpInstalled) {
+                    setLoadingStatus('downloading-ytdlp')
                     await installYtdlp()
                 }
+
+                // Install ffmpeg if needed
+                if (!ffmpegAvailable) {
+                    setLoadingStatus('downloading-ffmpeg')
+                    await installFfmpeg()
+                }
+
+                unlisten()
                 setIsInitializing(false)
             } catch (error) {
-                console.error('Failed to initialize yt-dlp:', error)
+                console.error('Failed to initialize dependencies:', error)
                 setIsInitializing(false)
             }
         }
-        initYtdlp()
+        initDependencies()
     }, [])
 
     // Listen to playback state changes
@@ -254,14 +310,10 @@ export function HomePage() {
 
     if (isInitializing) {
         return (
-            <div className="flex h-screen items-center justify-center bg-background">
-                <div className="text-center">
-                    <div className="text-2xl mb-2">⏳</div>
-                    <div className="text-sm text-muted-foreground">
-                        Initializing...
-                    </div>
-                </div>
-            </div>
+            <DependencyLoader
+                status={loadingStatus}
+                progress={loadingProgress}
+            />
         )
     }
 

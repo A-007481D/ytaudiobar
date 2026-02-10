@@ -5,6 +5,7 @@ mod models;
 mod database;
 mod ytdlp_manager;
 mod ytdlp_installer;
+mod ffmpeg_installer;
 mod audio_manager;
 mod queue_manager;
 mod download_manager;
@@ -12,7 +13,7 @@ mod media_key_manager;
 
 use std::sync::Arc;
 use tauri::{
-    Manager, State, WindowEvent, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
+    AppHandle, Manager, State, WindowEvent, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     menu::{Menu, MenuItem}
 };
 
@@ -20,6 +21,7 @@ use crate::database::DatabaseManager;
 use crate::models::{AudioState, Playlist, RepeatMode, Track, YTVideoInfo};
 use crate::ytdlp_manager::YTDLPManager;
 use crate::ytdlp_installer::YTDLPInstaller;
+use crate::ffmpeg_installer::FfmpegInstaller;
 use crate::audio_manager::AudioManager;
 use crate::queue_manager::QueueManager;
 use crate::download_manager::DownloadManager;
@@ -56,13 +58,29 @@ async fn check_ytdlp_installed() -> Result<bool, String> {
 }
 
 #[tauri::command]
-async fn install_ytdlp() -> Result<(), String> {
-    YTDLPInstaller::install().await
+async fn install_ytdlp(app_handle: AppHandle) -> Result<(), String> {
+    YTDLPInstaller::install(&app_handle).await
 }
 
 #[tauri::command]
 async fn get_ytdlp_version() -> Result<String, String> {
     YTDLPInstaller::get_version().await
+}
+
+#[tauri::command]
+async fn check_ytdlp_update(app_handle: AppHandle) -> Result<Option<String>, String> {
+    YTDLPInstaller::check_and_update(&app_handle).await
+}
+
+// Ffmpeg commands
+#[tauri::command]
+async fn check_ffmpeg_available() -> Result<bool, String> {
+    Ok(FfmpegInstaller::is_available().await)
+}
+
+#[tauri::command]
+async fn install_ffmpeg(app_handle: AppHandle) -> Result<(), String> {
+    FfmpegInstaller::ensure_available(&app_handle).await
 }
 
 // Audio playback commands
@@ -660,6 +678,14 @@ async fn main() {
                 audio_clone.set_app_handle(handle).await;
             });
 
+            // Check for yt-dlp updates in background (max once per 24h)
+            let update_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = YTDLPInstaller::check_and_update(&update_handle).await {
+                    eprintln!("⚠️ Failed to check for yt-dlp updates: {}", e);
+                }
+            });
+
             // Set app handle in download manager and initialize existing downloads
             let handle = app.handle().clone();
             let download_clone = Arc::clone(&download_manager);
@@ -833,6 +859,9 @@ async fn main() {
             check_ytdlp_installed,
             install_ytdlp,
             get_ytdlp_version,
+            check_ytdlp_update,
+            check_ffmpeg_available,
+            install_ffmpeg,
             play_track,
             toggle_play_pause,
             pause_playback,

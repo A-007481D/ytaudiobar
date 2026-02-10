@@ -1,6 +1,31 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use futures_util::StreamExt;
+use tauri::{AppHandle, Emitter};
+
+static INSTALL_LOCK: Lazy<Arc<Mutex<bool>>> = Lazy::new(|| Arc::new(Mutex::new(false)));
+
+#[derive(Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UpdateCheck {
+    last_check: i64,
+}
+
+#[derive(Clone, Serialize)]
+pub struct DepProgress {
+    pub dependency: String,
+    pub downloaded: u64,
+    pub total: u64,
+}
 
 pub struct YTDLPInstaller;
 
@@ -29,25 +54,22 @@ impl YTDLPInstaller {
         Self::get_ytdlp_path().exists()
     }
 
-    pub async fn install() -> Result<(), String> {
+    async fn download_with_progress(app_handle: &AppHandle) -> Result<(), String> {
         let ytdlp_dir = Self::get_ytdlp_dir();
         let ytdlp_path = Self::get_ytdlp_path();
 
-        // Create directory if it doesn't exist
         fs::create_dir_all(&ytdlp_dir)
             .await
             .map_err(|e| format!("Failed to create directory: {}", e))?;
 
-        // Download URL based on platform
         #[cfg(target_os = "windows")]
         let download_url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
 
         #[cfg(target_os = "linux")]
         let download_url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
 
-        println!("Downloading yt-dlp from: {}", download_url);
+        println!("📥 Downloading yt-dlp from: {}", download_url);
 
-        // Download the binary
         let response = reqwest::get(download_url)
             .await
             .map_err(|e| format!("Failed to download yt-dlp: {}", e))?;
@@ -56,19 +78,28 @@ impl YTDLPInstaller {
             return Err(format!("Failed to download yt-dlp: HTTP {}", response.status()));
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| format!("Failed to read download: {}", e))?;
-
-        // Write to file
+        let total_size = response.content_length().unwrap_or(0);
+        let mut downloaded: u64 = 0;
+        let mut stream = response.bytes_stream();
         let mut file = fs::File::create(&ytdlp_path)
             .await
             .map_err(|e| format!("Failed to create file: {}", e))?;
 
-        file.write_all(&bytes)
-            .await
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Write error: {}", e))?;
+
+            downloaded += chunk.len() as u64;
+
+            // Emit real progress
+            let _ = app_handle.emit("dep-progress", DepProgress {
+                dependency: "ytdlp".to_string(),
+                downloaded,
+                total: total_size,
+            });
+        }
 
         // Make executable on Linux
         #[cfg(not(target_os = "windows"))]
@@ -82,9 +113,33 @@ impl YTDLPInstaller {
                 .map_err(|e| format!("Failed to set permissions: {}", e))?;
         }
 
-        println!("yt-dlp installed successfully at: {}", ytdlp_path.display());
-
+        println!("✅ yt-dlp installed at: {}", ytdlp_path.display());
         Ok(())
+    }
+
+    pub async fn install(app_handle: &AppHandle) -> Result<(), String> {
+        let mut installing = INSTALL_LOCK.lock().await;
+
+        if Self::is_installed().await {
+            return Ok(());
+        }
+
+        if *installing {
+            drop(installing);
+            for _ in 0..120 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                if Self::is_installed().await {
+                    return Ok(());
+                }
+            }
+            return Err("yt-dlp installation timeout".to_string());
+        }
+
+        *installing = true;
+        let result = Self::download_with_progress(app_handle).await;
+        *installing = false;
+
+        result
     }
 
     pub async fn get_version() -> Result<String, String> {
@@ -105,5 +160,96 @@ impl YTDLPInstaller {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    fn get_update_check_file() -> PathBuf {
+        let mut path = Self::get_ytdlp_dir();
+        path.push("last_update_check.json");
+        path
+    }
+
+    async fn get_last_update_check() -> Option<i64> {
+        let check_file = Self::get_update_check_file();
+        if !check_file.exists() {
+            return None;
+        }
+
+        let content = fs::read_to_string(&check_file).await.ok()?;
+        let check: UpdateCheck = serde_json::from_str(&content).ok()?;
+        Some(check.last_check)
+    }
+
+    async fn save_update_check() -> Result<(), String> {
+        let check_file = Self::get_update_check_file();
+        let check = UpdateCheck {
+            last_check: chrono::Utc::now().timestamp(),
+        };
+        let content = serde_json::to_string(&check)
+            .map_err(|e| format!("Failed to serialize update check: {}", e))?;
+        fs::write(&check_file, content)
+            .await
+            .map_err(|e| format!("Failed to write update check: {}", e))
+    }
+
+    pub async fn should_check_for_update() -> bool {
+        match Self::get_last_update_check().await {
+            Some(last_check) => {
+                let now = chrono::Utc::now().timestamp();
+                let hours_since_check = (now - last_check) / 3600;
+                hours_since_check >= 24
+            }
+            None => true,
+        }
+    }
+
+    pub async fn fetch_latest_version() -> Result<String, String> {
+        let url = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(url)
+            .header("User-Agent", "YTAudioBar")
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch latest version: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("GitHub API error: HTTP {}", response.status()));
+        }
+
+        let release: GitHubRelease = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        Ok(release.tag_name)
+    }
+
+    pub async fn check_and_update(app_handle: &AppHandle) -> Result<Option<String>, String> {
+        if !Self::is_installed().await {
+            return Err("yt-dlp not installed".to_string());
+        }
+
+        if !Self::should_check_for_update().await {
+            return Ok(None);
+        }
+
+        println!("🔍 Checking for yt-dlp updates...");
+
+        let current_version = Self::get_version().await?;
+        let latest_version = Self::fetch_latest_version().await?;
+
+        let _ = Self::save_update_check().await;
+
+        if current_version == latest_version {
+            println!("✅ yt-dlp is up to date ({})", current_version);
+            return Ok(None);
+        }
+
+        println!("📦 Updating yt-dlp: {} → {}", current_version, latest_version);
+        Self::install(app_handle).await?;
+
+        println!("✅ yt-dlp updated to {}", latest_version);
+        Ok(Some(latest_version))
     }
 }
