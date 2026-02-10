@@ -441,6 +441,18 @@ async fn clear_media_info(state: State<'_, AppState>) -> Result<(), String> {
 async fn check_for_updates_silently(app: tauri::AppHandle) {
     use tauri_plugin_updater::UpdaterExt;
 
+    // On Linux, auto-update only works with AppImage, not .deb
+    #[cfg(target_os = "linux")]
+    {
+        let exe_path = std::env::current_exe().unwrap_or_default();
+        let exe_str = exe_path.to_string_lossy();
+        if !exe_str.contains("AppImage") && !exe_str.contains("appimage") {
+            println!("ℹ️ Skipping auto-update: .deb installations cannot be updated automatically.");
+            println!("   To get auto-updates, use the AppImage version instead.");
+            return;
+        }
+    }
+
     println!("🔍 Starting update check...");
     println!("📍 Update endpoint: https://github.com/ilyassan/ytaudiobar/releases/latest/download/latest.json");
 
@@ -493,6 +505,61 @@ async fn check_for_updates_silently(app: tauri::AppHandle) {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn integrate_appimage_to_system() {
+    // Only integrate if running from AppImage
+    if let Ok(appimage_path) = std::env::var("APPIMAGE") {
+        let home = match std::env::var("HOME") {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+
+        let desktop_file = format!("{}/.local/share/applications/ytaudiobar.desktop", home);
+
+        // Check if already integrated
+        if std::path::Path::new(&desktop_file).exists() {
+            return;
+        }
+
+        println!("📦 Integrating YTAudioBar to system app menu...");
+
+        // Create .local/share/applications directory if it doesn't exist
+        let apps_dir = format!("{}/.local/share/applications", home);
+        if let Err(e) = std::fs::create_dir_all(&apps_dir) {
+            eprintln!("⚠️ Failed to create applications directory: {}", e);
+            return;
+        }
+
+        // Create desktop entry
+        let desktop_content = format!(
+            "[Desktop Entry]\n\
+             Type=Application\n\
+             Name=YTAudioBar\n\
+             Comment=YouTube Audio Player\n\
+             Exec={}\n\
+             Icon=ytaudiobar\n\
+             Categories=AudioVideo;Audio;Player;\n\
+             Terminal=false\n\
+             StartupWMClass=YTAudioBar\n\
+             X-AppImage-Version={}\n",
+            appimage_path,
+            env!("CARGO_PKG_VERSION")
+        );
+
+        if let Err(e) = std::fs::write(&desktop_file, desktop_content) {
+            eprintln!("⚠️ Failed to create desktop entry: {}", e);
+            return;
+        }
+
+        // Update desktop database (optional, for immediate menu refresh)
+        let _ = std::process::Command::new("update-desktop-database")
+            .arg(apps_dir)
+            .output();
+
+        println!("✅ YTAudioBar integrated! You can now find it in your app menu.");
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Force X11 backend on Linux - Wayland doesn't support:
@@ -503,6 +570,9 @@ async fn main() {
     #[cfg(target_os = "linux")]
     {
         std::env::set_var("GDK_BACKEND", "x11");
+
+        // Integrate AppImage to system on first run
+        integrate_appimage_to_system();
     }
 
     // Initialize database
