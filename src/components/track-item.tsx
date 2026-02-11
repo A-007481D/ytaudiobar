@@ -19,7 +19,11 @@ import {
     type Track,
     formatDuration
 } from '@/lib/tauri'
-import { PlaylistSelectionModal } from '@/features/playlists/playlist-selection-modal'
+import {
+    PlaylistSelectionModal,
+    loadPlaylistsWithTrackData,
+    type PlaylistWithData
+} from '@/features/playlists/playlist-selection-modal'
 import { usePlayerStore } from '@/stores/player-store'
 
 interface TrackItemProps {
@@ -43,6 +47,9 @@ export function TrackItem({
     onToggleFavorite
 }: TrackItemProps) {
     const [showPlaylistModal, setShowPlaylistModal] = useState(false)
+    const [loadedPlaylists, setLoadedPlaylists] = useState<
+        PlaylistWithData[] | null
+    >(null)
     const [isDownloaded, setIsDownloaded] = useState(false)
     const [isDownloading, setIsDownloading] = useState(false)
     const [downloadProgress, setDownloadProgress] = useState<number>(0)
@@ -203,13 +210,19 @@ export function TrackItem({
     // Removed: handleAddToQueue - tracks are no longer manually added to queue
     // Queue is only populated by "Play All" playlist action
 
-    const handleToggleFavorite = (e: React.MouseEvent) => {
+    const handleToggleFavorite = async (e: React.MouseEvent) => {
         e.stopPropagation()
         if (onToggleFavorite) {
             onToggleFavorite()
         } else {
-            // Fallback to add to playlist modal
-            setShowPlaylistModal(true)
+            // Load playlists first, then show modal
+            try {
+                const playlists = await loadPlaylistsWithTrackData(videoInfo.id)
+                setLoadedPlaylists(playlists)
+                setShowPlaylistModal(true)
+            } catch (error) {
+                console.error('Failed to load playlists:', error)
+            }
         }
     }
 
@@ -402,11 +415,13 @@ export function TrackItem({
             </div>
 
             {/* Playlist Selection Modal */}
-            {showPlaylistModal && (
+            {showPlaylistModal && loadedPlaylists && (
                 <PlaylistSelectionModal
                     track={videoInfo}
+                    initialPlaylists={loadedPlaylists}
                     onClose={() => {
                         setShowPlaylistModal(false)
+                        setLoadedPlaylists(null)
                         // Trigger a re-check of favorites after modal closes
                         if (onToggleFavorite) {
                             // Parent component should handle refreshing favorites
