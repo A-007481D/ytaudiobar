@@ -193,23 +193,8 @@ impl YTDLPManager {
 
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-        // On Linux, try to use system Python + yt-dlp script for better compatibility
-        #[cfg(target_os = "linux")]
-        let use_system_python = YTDLPInstaller::is_system_python_available().await;
-
-        #[cfg(not(target_os = "linux"))]
-        let use_system_python = false;
-
-        let mut command = if use_system_python {
-            // Use system Python to run yt-dlp script
-            let mut cmd = Command::new("python3");
-            cmd.arg(&ytdlp_path);
-            cmd
-        } else {
-            // Use standalone yt-dlp binary
-            Command::new(&ytdlp_path)
-        };
-
+        // Execute yt-dlp binary directly (same as macOS - no Python needed)
+        let mut command = Command::new(&ytdlp_path);
         command
             .args(&args_refs)
             .stdin(Stdio::null())  // Close stdin - don't wait for input

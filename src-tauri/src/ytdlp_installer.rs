@@ -54,16 +54,6 @@ impl YTDLPInstaller {
         Self::get_ytdlp_path().exists()
     }
 
-    /// Check if system Python 3 is available
-    pub async fn is_system_python_available() -> bool {
-        tokio::process::Command::new("python3")
-            .arg("--version")
-            .output()
-            .await
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    }
-
     async fn download_with_progress(app_handle: &AppHandle) -> Result<(), String> {
         let ytdlp_dir = Self::get_ytdlp_dir();
         let ytdlp_path = Self::get_ytdlp_path();
@@ -77,14 +67,9 @@ impl YTDLPInstaller {
 
         #[cfg(target_os = "linux")]
         let download_url = {
-            // On Linux, prefer Python script if system Python is available
-            if Self::is_system_python_available().await {
-                println!("✅ System Python detected, downloading yt-dlp Python script");
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-            } else {
-                println!("⚠️ No system Python found, downloading standalone binary");
-                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
-            }
+            // Use standalone binary (same approach as macOS - no Python needed)
+            println!("📥 Downloading yt-dlp standalone binary for Linux");
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
         };
 
         println!("📥 Downloading yt-dlp from: {}", download_url);
