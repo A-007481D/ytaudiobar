@@ -16,6 +16,7 @@ use tauri::{
     AppHandle, Manager, State, WindowEvent, tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     menu::{Menu, MenuItem}
 };
+use tauri_plugin_autostart::ManagerExt;
 
 use crate::database::DatabaseManager;
 use crate::models::{AudioState, Playlist, RepeatMode, Track, YTVideoInfo};
@@ -686,6 +687,7 @@ async fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![])))
         .manage(app_state)
         .setup(move |app| {
             // Window positioning is handled later in setup with manual calculations
@@ -730,6 +732,29 @@ async fn main() {
                 tokio::time::sleep(Duration::from_secs(3)).await;
                 println!("🔍 Checking for updates in background...");
                 check_for_updates_silently(handle).await;
+            });
+
+            // Enable autostart on first run
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let manager = handle.autolaunch();
+                match manager.is_enabled() {
+                    Ok(is_enabled) => {
+                        if !is_enabled {
+                            println!("🚀 Enabling autostart on system boot...");
+                            if let Err(e) = manager.enable() {
+                                eprintln!("⚠️ Failed to enable autostart: {}", e);
+                            } else {
+                                println!("✅ Autostart enabled successfully");
+                            }
+                        } else {
+                            println!("✅ Autostart already enabled");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ Failed to check autostart status: {}", e);
+                    }
+                }
             });
 
             // Listen for track-ended events and auto-play next track

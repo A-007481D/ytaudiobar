@@ -90,7 +90,11 @@
             "updater:allow-check",
             "updater:allow-download",
             "updater:allow-install",
-            "updater:allow-download-and-install"
+            "updater:allow-download-and-install",
+            "autostart:default",
+            "autostart:allow-enable",
+            "autostart:allow-disable",
+            "autostart:allow-is-enabled"
           ]
         }
       ]
