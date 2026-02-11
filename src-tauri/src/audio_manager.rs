@@ -9,6 +9,9 @@ use tokio::sync::{mpsc, Mutex};
 use tauri::{AppHandle, Emitter};
 use std::sync::mpsc as std_mpsc;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 // Symphonia imports for direct decoding + fast seeking
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
@@ -840,7 +843,8 @@ fn audio_thread(
                         eprintln!("⚠️ SymphoniaSource failed: {}", e);
                         println!("📥 Falling back to memory mode (ffmpeg)...");
 
-                        let ffmpeg_output = match Command::new(&AudioManager::get_ffmpeg_command())
+                        let mut ffmpeg_cmd = Command::new(&AudioManager::get_ffmpeg_command());
+                        ffmpeg_cmd
                             .args(&[
                                 "-i", &file_path,
                                 "-f", "s16le",
@@ -851,8 +855,12 @@ fn audio_thread(
                                 "pipe:1",
                             ])
                             .stdout(Stdio::piped())
-                            .stderr(Stdio::null())
-                            .output()
+                            .stderr(Stdio::null());
+
+                        #[cfg(target_os = "windows")]
+                        ffmpeg_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+                        let ffmpeg_output = match ffmpeg_cmd.output()
                         {
                             Ok(output) => output,
                             Err(e) => {
@@ -1023,7 +1031,8 @@ fn audio_thread(
                     println!("⏩ Seeking URL to {:.1}s via ffmpeg...", position);
 
                     let pos_str = format!("{:.3}", position);
-                    let mut child = match Command::new(&AudioManager::get_ffmpeg_command())
+                    let mut ffmpeg_cmd = Command::new(&AudioManager::get_ffmpeg_command());
+                    ffmpeg_cmd
                         .args(&[
                             "-ss", &pos_str,
                             "-i", audio_url,
@@ -1035,8 +1044,12 @@ fn audio_thread(
                             "pipe:1",
                         ])
                         .stdout(Stdio::piped())
-                        .stderr(Stdio::null())
-                        .spawn()
+                        .stderr(Stdio::null());
+
+                    #[cfg(target_os = "windows")]
+                    ffmpeg_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+                    let mut child = match ffmpeg_cmd.spawn()
                     {
                         Ok(child) => child,
                         Err(e) => {

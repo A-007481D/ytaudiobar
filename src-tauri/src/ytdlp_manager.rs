@@ -415,8 +415,13 @@ impl YTDLPManager {
             &url,
         ];
 
-        let output = Command::new(&ytdlp_path)
-            .args(&args)
+        let mut cmd = tokio::process::Command::new(&ytdlp_path);
+        cmd.args(&args);
+
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let output = cmd
             .output()
             .await
             .map_err(|e| format!("Failed to get video details: {}", e))?;
