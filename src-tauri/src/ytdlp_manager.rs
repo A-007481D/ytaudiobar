@@ -1,16 +1,14 @@
 use crate::models::YTVideoInfo;
 use crate::ytdlp_installer::YTDLPInstaller;
+use crate::command_utils::command_no_window;
 use serde_json::Value;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Child;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 // Global search process manager
 static SEARCH_PROCESS: Lazy<Arc<Mutex<Option<Child>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
@@ -194,23 +192,14 @@ impl YTDLPManager {
 
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-        // Execute yt-dlp binary directly (same as macOS - no Python needed)
-        let mut command = Command::new(&ytdlp_path);
-        command
+        // Execute yt-dlp binary directly
+        let mut child = command_no_window(&ytdlp_path)
             .args(&args_refs)
             .stdin(Stdio::null())  // Close stdin - don't wait for input
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())  // Capture stderr for error messages
             .env("PYTHONIOENCODING", "utf-8")  // Help Python initialize encoding
-            .env("LC_ALL", "C.UTF-8");  // Set locale for Python
-
-        // On Windows, prevent console window from appearing
-        #[cfg(target_os = "windows")]
-        {
-            command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        }
-
-        let mut child = command
+            .env("LC_ALL", "C.UTF-8")  // Set locale for Python
             .spawn()
             .map_err(|e| format!("Failed to spawn yt-dlp: {}. Make sure yt-dlp is installed.", e))?;
 
@@ -314,7 +303,7 @@ impl YTDLPManager {
 
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-        let output = Command::new(&ytdlp_path)
+        let output = command_no_window(&ytdlp_path)
             .args(&args_refs)
             .output()
             .await
@@ -380,7 +369,7 @@ impl YTDLPManager {
     pub async fn check_ytdlp_exists(&self) -> bool {
         let ytdlp_path = Self::get_ytdlp_path();
 
-        Command::new(&ytdlp_path)
+        command_no_window(&ytdlp_path)
             .arg("--version")
             .output()
             .await
@@ -391,7 +380,7 @@ impl YTDLPManager {
     pub async fn update_ytdlp(&self) -> Result<(), String> {
         let ytdlp_path = Self::get_ytdlp_path();
 
-        let output = Command::new(&ytdlp_path)
+        let output = command_no_window(&ytdlp_path)
             .arg("-U")
             .output()
             .await
@@ -415,13 +404,8 @@ impl YTDLPManager {
             &url,
         ];
 
-        let mut cmd = tokio::process::Command::new(&ytdlp_path);
-        cmd.args(&args);
-
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-
-        let output = cmd
+        let output = command_no_window(&ytdlp_path)
+            .args(&args)
             .output()
             .await
             .map_err(|e| format!("Failed to get video details: {}", e))?;

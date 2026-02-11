@@ -1,16 +1,14 @@
 use crate::models::{AudioState, YTVideoInfo};
 use crate::ytdlp_installer::YTDLPInstaller;
 use crate::ffmpeg_installer::FfmpegInstaller;
+use crate::command_utils::command_no_window_blocking;
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink, Source};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{mpsc, Mutex};
 use tauri::{AppHandle, Emitter};
 use std::sync::mpsc as std_mpsc;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 // Symphonia imports for direct decoding + fast seeking
 use symphonia::core::audio::SampleBuffer;
@@ -377,7 +375,7 @@ impl AudioManager {
     // Helper function to get ffmpeg path (system or local)
     fn get_ffmpeg_command() -> String {
         // First check if system ffmpeg exists in PATH
-        let system_check = std::process::Command::new("ffmpeg")
+        let system_check = command_no_window_blocking("ffmpeg")
             .arg("-version")
             .output();
 
@@ -694,7 +692,7 @@ fn audio_thread(
                 let args_refs: Vec<&str> = ytdlp_args.iter().map(|s| s.as_str()).collect();
 
                 // Get the audio URL
-                let ytdlp_output = match Command::new(&ytdlp_path)
+                let ytdlp_output = match command_no_window_blocking(&ytdlp_path.to_string_lossy())
                     .args(&args_refs)
                     .output()
                 {
@@ -843,8 +841,7 @@ fn audio_thread(
                         eprintln!("⚠️ SymphoniaSource failed: {}", e);
                         println!("📥 Falling back to memory mode (ffmpeg)...");
 
-                        let mut ffmpeg_cmd = Command::new(&AudioManager::get_ffmpeg_command());
-                        ffmpeg_cmd
+                        let ffmpeg_output = match command_no_window_blocking(&AudioManager::get_ffmpeg_command())
                             .args(&[
                                 "-i", &file_path,
                                 "-f", "s16le",
@@ -855,12 +852,8 @@ fn audio_thread(
                                 "pipe:1",
                             ])
                             .stdout(Stdio::piped())
-                            .stderr(Stdio::null());
-
-                        #[cfg(target_os = "windows")]
-                        ffmpeg_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-
-                        let ffmpeg_output = match ffmpeg_cmd.output()
+                            .stderr(Stdio::null())
+                            .output()
                         {
                             Ok(output) => output,
                             Err(e) => {
@@ -1031,8 +1024,7 @@ fn audio_thread(
                     println!("⏩ Seeking URL to {:.1}s via ffmpeg...", position);
 
                     let pos_str = format!("{:.3}", position);
-                    let mut ffmpeg_cmd = Command::new(&AudioManager::get_ffmpeg_command());
-                    ffmpeg_cmd
+                    let mut child = match command_no_window_blocking(&AudioManager::get_ffmpeg_command())
                         .args(&[
                             "-ss", &pos_str,
                             "-i", audio_url,
@@ -1044,12 +1036,8 @@ fn audio_thread(
                             "pipe:1",
                         ])
                         .stdout(Stdio::piped())
-                        .stderr(Stdio::null());
-
-                    #[cfg(target_os = "windows")]
-                    ffmpeg_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-
-                    let mut child = match ffmpeg_cmd.spawn()
+                        .stderr(Stdio::null())
+                        .spawn()
                     {
                         Ok(child) => child,
                         Err(e) => {

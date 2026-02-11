@@ -10,6 +10,7 @@ mod audio_manager;
 mod queue_manager;
 mod download_manager;
 mod media_key_manager;
+mod command_utils;
 
 use std::sync::Arc;
 use tauri::{
