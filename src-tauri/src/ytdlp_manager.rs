@@ -192,8 +192,9 @@ impl YTDLPManager {
 
         let mut child = Command::new(&ytdlp_path)
             .args(&args_refs)
+            .stdin(Stdio::null())  // Close stdin - don't wait for input
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())  // Capture stderr for error messages
             .spawn()
             .map_err(|e| format!("Failed to spawn yt-dlp: {}. Make sure yt-dlp is installed.", e))?;
 
@@ -202,11 +203,24 @@ impl YTDLPManager {
             .take()
             .ok_or("Failed to capture stdout")?;
 
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or("Failed to capture stderr")?;
+
         // Store the child process so it can be cancelled
         {
             let mut search_process = SEARCH_PROCESS.lock().await;
             *search_process = Some(child);
         }
+
+        // Spawn task to read stderr in background
+        let stderr_handle = tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            use tokio::io::AsyncReadExt;
+            let _ = stderr.read_to_end(&mut buffer).await;
+            String::from_utf8_lossy(&buffer).to_string()
+        });
 
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -233,7 +247,16 @@ impl YTDLPManager {
         exit_status.map_err(|e| format!("yt-dlp process error: {}", e))?;
 
         if results.is_empty() {
-            return Err("No results found".to_string());
+            let stderr_output = match stderr_handle.await {
+                Ok(err) => err,
+                Err(_) => String::new(),
+            };
+            let error_msg = if !stderr_output.is_empty() {
+                format!("No results found. yt-dlp stderr: {}", stderr_output.trim())
+            } else {
+                "No results found".to_string()
+            };
+            return Err(error_msg);
         }
 
         Ok(results)
