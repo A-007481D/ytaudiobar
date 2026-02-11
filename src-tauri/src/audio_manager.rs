@@ -405,6 +405,9 @@ impl AudioManager {
 
         self.emit_state_change().await;
 
+        // Update OS media controls with the correct thumbnail_url
+        self.update_media_controls(&track).await;
+
         // Send play command to audio thread
         self.command_tx
             .send(AudioCommand::Play(track))
@@ -427,6 +430,9 @@ impl AudioManager {
         }
 
         self.emit_state_change().await;
+
+        // Update OS media controls with the correct thumbnail_url
+        self.update_media_controls(&track).await;
 
         // Send play from file command to audio thread
         self.command_tx
@@ -508,6 +514,23 @@ impl AudioManager {
         if let Some(handle) = app_guard.as_ref() {
             let state = self.state.lock().await;
             let _ = handle.emit("playback-state-changed", state.clone());
+        }
+    }
+
+    async fn update_media_controls(&self, track: &YTVideoInfo) {
+        let app_guard = self.app_handle.lock().await;
+        if let Some(handle) = app_guard.as_ref() {
+            // Always use a jpg thumbnail URL from the video ID (webp not supported by Windows SMTC)
+            let cover_url = Some(format!("https://i.ytimg.com/vi/{}/hqdefault.jpg", track.id));
+            println!("🎵 Updating media controls with cover_url: {:?}", cover_url);
+            use tauri::Manager;
+            let state = handle.state::<crate::AppState>();
+            state.media_keys.update_metadata(
+                track.title.clone(),
+                track.uploader.clone(),
+                track.duration as f64,
+                cover_url,
+            ).await;
         }
     }
 }

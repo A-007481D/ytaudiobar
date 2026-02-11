@@ -158,13 +158,8 @@ export function HomePage() {
     // Update media info when track or playback state changes
     useEffect(() => {
         if (audioState && audioState.current_track) {
-            updateMediaMetadata(
-                audioState.current_track.title,
-                audioState.current_track.uploader,
-                audioState.duration,
-                audioState.current_track.thumbnail_url || null
-            ).catch(console.error)
-
+            // Note: updateMediaMetadata is now called from backend directly to avoid race conditions
+            // Only update playback state from frontend
             updateMediaPlaybackState(
                 audioState.is_playing,
                 audioState.current_position,

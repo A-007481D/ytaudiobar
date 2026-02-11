@@ -140,7 +140,6 @@ async fn set_playback_speed(rate: f32, state: State<'_, AppState>) -> Result<(),
 #[tauri::command]
 async fn play_next(state: State<'_, AppState>) -> Result<Option<YTVideoInfo>, String> {
     if let Some(track) = state.queue.play_next().await {
-        // Check if track is downloaded and use local file if available
         if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
             println!("🎵 Playing next from local file: {}", file_path);
             state.audio.play_from_file(track.clone(), file_path).await?;
@@ -156,7 +155,6 @@ async fn play_next(state: State<'_, AppState>) -> Result<Option<YTVideoInfo>, St
 #[tauri::command]
 async fn play_previous(state: State<'_, AppState>) -> Result<Option<YTVideoInfo>, String> {
     if let Some(track) = state.queue.play_previous().await {
-        // Check if track is downloaded and use local file if available
         if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
             println!("🎵 Playing previous from local file: {}", file_path);
             state.audio.play_from_file(track.clone(), file_path).await?;
@@ -769,7 +767,6 @@ async fn main() {
                         println!("🎵 Track ended, attempting to play next...");
                         if let Some(track) = state.queue.play_next().await {
                             println!("▶️ Auto-playing next track: {}", track.title);
-                            // Check if track is downloaded and use local file if available
                             if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
                                 println!("🎵 Auto-playing from local file: {}", file_path);
                                 let _ = state.audio.play_from_file(track, file_path).await;
