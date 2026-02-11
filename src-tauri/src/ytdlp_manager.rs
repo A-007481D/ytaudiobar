@@ -9,6 +9,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 // Global search process manager
 static SEARCH_PROCESS: Lazy<Arc<Mutex<Option<Child>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
 
@@ -190,11 +193,22 @@ impl YTDLPManager {
 
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-        let mut child = Command::new(&ytdlp_path)
+        let mut command = Command::new(&ytdlp_path);
+        command
             .args(&args_refs)
             .stdin(Stdio::null())  // Close stdin - don't wait for input
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())  // Capture stderr for error messages
+            .env("PYTHONIOENCODING", "utf-8")  // Help Python initialize encoding
+            .env("LC_ALL", "C.UTF-8");  // Set locale for Python
+
+        // On Windows, prevent console window from appearing
+        #[cfg(target_os = "windows")]
+        {
+            command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
+        let mut child = command
             .spawn()
             .map_err(|e| format!("Failed to spawn yt-dlp: {}. Make sure yt-dlp is installed.", e))?;
 
