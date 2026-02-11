@@ -499,10 +499,18 @@ async fn check_for_updates_silently(app: tauri::AppHandle) {
                             println!("📦 Download complete!");
                         }
                     ).await {
-                        Ok(_bytes) => {
+                        Ok(bytes) => {
                             println!("✅ Update downloaded successfully!");
-                            println!("📌 Update will be installed when you close the app");
-                            // The update is downloaded and ready - Tauri will install it on app exit
+
+                            // Finalize the update (instant, non-blocking)
+                            match update.install(bytes) {
+                                Ok(_) => {
+                                    println!("✅ Update ready! Will be applied on next app launch");
+                                }
+                                Err(e) => {
+                                    eprintln!("⚠️ Failed to finalize update: {}", e);
+                                }
+                            }
                         }
                         Err(e) => {
                             eprintln!("❌ Failed to download update: {}", e);
