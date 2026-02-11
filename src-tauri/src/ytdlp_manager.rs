@@ -184,7 +184,8 @@ impl YTDLPManager {
         let bypass_args = Self::build_bypass_args(bypass_method);
 
         let mut args = vec![
-            "--dump-json".to_string(),
+            "--flat-playlist".to_string(),  // Fast search - skip detailed metadata
+            "-j".to_string(),                // JSON output
             "--no-warnings".to_string(),
             "--ignore-errors".to_string(),
         ];
@@ -350,9 +351,18 @@ impl YTDLPManager {
                 .to_string(),
             duration: json.get("duration").and_then(|v| v.as_i64()).unwrap_or(0),
             thumbnail_url: json
-                .get("thumbnail")
+                .get("thumbnails")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|thumb| thumb.get("url"))
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    // Fallback to single "thumbnail" field (for full metadata)
+                    json.get("thumbnail")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                }),
             audio_url: None,
             description: json
                 .get("description")
@@ -392,5 +402,33 @@ impl YTDLPManager {
         }
 
         Ok(())
+    }
+
+    // Fetch detailed metadata for a single video (for lazy loading durations)
+    pub async fn get_video_details(&self, video_id: String) -> Result<YTVideoInfo, String> {
+        let ytdlp_path = Self::get_ytdlp_path();
+        let url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+        let args = vec![
+            "--dump-json",
+            "--no-warnings",
+            &url,
+        ];
+
+        let output = Command::new(&ytdlp_path)
+            .args(&args)
+            .output()
+            .await
+            .map_err(|e| format!("Failed to get video details: {}", e))?;
+
+        if !output.status.success() {
+            return Err("Failed to extract video details".to_string());
+        }
+
+        let json: Value = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse video details: {}", e))?;
+
+        Self::parse_video_info(&json)
+            .ok_or_else(|| "Failed to parse video info".to_string())
     }
 }

@@ -64,6 +64,8 @@ export interface DownloadedTrack {
 export const searchYoutube = (query: string, musicMode: boolean) =>
     invoke<YTVideoInfo[]>('search_youtube', { query, musicMode })
 export const cancelSearch = () => invoke<void>('cancel_search')
+export const getVideoDetails = (videoId: string) =>
+    invoke<YTVideoInfo>('get_video_details', { videoId })
 
 // YTDLP
 export const checkYtdlpInstalled = () =>

@@ -1,5 +1,6 @@
 use crate::models::{AudioState, YTVideoInfo};
 use crate::ytdlp_installer::YTDLPInstaller;
+use crate::ffmpeg_installer::FfmpegInstaller;
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink, Source};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -368,6 +369,24 @@ impl AudioManager {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         });
+    }
+
+    // Helper function to get ffmpeg path (system or local)
+    fn get_ffmpeg_command() -> String {
+        // First check if system ffmpeg exists in PATH
+        let system_check = std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .output();
+
+        if let Ok(output) = system_check {
+            if output.status.success() {
+                return "ffmpeg".to_string(); // Use system ffmpeg
+            }
+        }
+
+        // Fall back to local installed ffmpeg
+        let local_path = FfmpegInstaller::get_ffmpeg_path();
+        local_path.to_string_lossy().to_string()
     }
 
     pub async fn play(&self, track: YTVideoInfo) -> Result<(), String> {
@@ -821,7 +840,7 @@ fn audio_thread(
                         eprintln!("⚠️ SymphoniaSource failed: {}", e);
                         println!("📥 Falling back to memory mode (ffmpeg)...");
 
-                        let ffmpeg_output = match Command::new("ffmpeg")
+                        let ffmpeg_output = match Command::new(&AudioManager::get_ffmpeg_command())
                             .args(&[
                                 "-i", &file_path,
                                 "-f", "s16le",
@@ -1004,7 +1023,7 @@ fn audio_thread(
                     println!("⏩ Seeking URL to {:.1}s via ffmpeg...", position);
 
                     let pos_str = format!("{:.3}", position);
-                    let mut child = match Command::new("ffmpeg")
+                    let mut child = match Command::new(&AudioManager::get_ffmpeg_command())
                         .args(&[
                             "-ss", &pos_str,
                             "-i", audio_url,

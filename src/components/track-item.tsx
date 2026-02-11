@@ -1,6 +1,24 @@
 import { useState, useEffect } from 'react'
-import { Play, Pause, Heart, Trash, Loader2, Music, Download } from 'lucide-react'
-import { playTrack, togglePlayPause, downloadTrack, isTrackDownloaded, getActiveDownloads, type YTVideoInfo, type Track, formatDuration } from '@/lib/tauri'
+import {
+    Play,
+    Pause,
+    Heart,
+    Trash,
+    Loader2,
+    Music,
+    Download
+} from 'lucide-react'
+import {
+    playTrack,
+    togglePlayPause,
+    downloadTrack,
+    isTrackDownloaded,
+    getActiveDownloads,
+    getVideoDetails,
+    type YTVideoInfo,
+    type Track,
+    formatDuration
+} from '@/lib/tauri'
 import { PlaylistSelectionModal } from '@/features/playlists/playlist-selection-modal'
 import { usePlayerStore } from '@/stores/player-store'
 
@@ -31,17 +49,26 @@ export function TrackItem({
     const [isCheckingDownload, setIsCheckingDownload] = useState(true)
 
     // Convert Track to YTVideoInfo format
-    const videoInfo: YTVideoInfo = 'uploader' in track ? track : {
-        ...track,
-        uploader: track.author || 'Unknown',
-        audio_url: null,
-        description: null
-    }
+    const videoInfo: YTVideoInfo =
+        'uploader' in track
+            ? track
+            : {
+                  ...track,
+                  uploader: track.author || 'Unknown',
+                  audio_url: null,
+                  description: null
+              }
 
     // Use Zustand store for player state
-    const { loadingTrackId, currentTrack, isPlaying: globalIsPlaying } = usePlayerStore()
+    const {
+        loadingTrackId,
+        currentTrack,
+        isPlaying: globalIsPlaying,
+        setLoadingTrack
+    } = usePlayerStore()
     const isThisTrackLoading = loadingTrackId === videoInfo.id
-    const isThisTrackPlaying = currentTrack?.id === videoInfo.id && globalIsPlaying
+    const isThisTrackPlaying =
+        currentTrack?.id === videoInfo.id && globalIsPlaying
 
     // Check if track is downloaded or downloading on mount
     useEffect(() => {
@@ -54,7 +81,9 @@ export function TrackItem({
                 // Check if currently downloading
                 if (!downloaded) {
                     const activeDownloads = await getActiveDownloads()
-                    const thisDownload = activeDownloads.find(d => d.video_id === videoInfo.id)
+                    const thisDownload = activeDownloads.find(
+                        (d) => d.video_id === videoInfo.id
+                    )
                     if (thisDownload) {
                         setIsDownloading(true)
                         setDownloadProgress(thisDownload.progress)
@@ -75,7 +104,9 @@ export function TrackItem({
                 setIsDownloaded(downloaded)
                 if (!downloaded) {
                     const activeDownloads = await getActiveDownloads()
-                    const thisDownload = activeDownloads.find(d => d.video_id === videoInfo.id)
+                    const thisDownload = activeDownloads.find(
+                        (d) => d.video_id === videoInfo.id
+                    )
                     if (thisDownload) {
                         setIsDownloading(true)
                         setDownloadProgress(thisDownload.progress)
@@ -95,7 +126,9 @@ export function TrackItem({
         const checkProgress = async () => {
             try {
                 const activeDownloads = await getActiveDownloads()
-                const thisDownload = activeDownloads.find(d => d.video_id === videoInfo.id)
+                const thisDownload = activeDownloads.find(
+                    (d) => d.video_id === videoInfo.id
+                )
                 if (thisDownload) {
                     setDownloadProgress(thisDownload.progress)
                     // If download completed, update state
@@ -131,12 +164,39 @@ export function TrackItem({
             if (currentTrack?.id === videoInfo.id) {
                 await togglePlayPause()
             } else {
+                // Set loading state IMMEDIATELY for instant UI feedback
+                setLoadingTrack(videoInfo.id)
+
+                // If duration is 0 (from search results), fetch full details first
+                let trackToPlay = videoInfo
+                if (videoInfo.duration === 0) {
+                    console.log(
+                        `⏱️ Fetching duration for ${videoInfo.id} before playing...`
+                    )
+                    try {
+                        const details = await getVideoDetails(videoInfo.id)
+                        trackToPlay = {
+                            ...videoInfo,
+                            duration: details.duration,
+                            description: details.description
+                        }
+                    } catch (error) {
+                        console.error(
+                            'Failed to fetch details, playing anyway:',
+                            error
+                        )
+                        // Play anyway even if fetching details fails
+                    }
+                }
+
                 // Play track directly WITHOUT adding to queue
                 // Queue is only populated via "Play All" on playlists
-                await playTrack(videoInfo)
+                await playTrack(trackToPlay)
             }
         } catch (error) {
             console.error('Failed to play track:', error)
+            // Clear loading state on error
+            setLoadingTrack(null)
         }
     }
 
@@ -171,16 +231,16 @@ export function TrackItem({
         <>
             <div
                 className={`flex items-center gap-3 px-3 py-2 hover-macos-button cursor-pointer transition-colors ${
-                    isCurrentTrack
-                        ? 'bg-[var(--macos-blue)]/10'
-                        : ''
+                    isCurrentTrack ? 'bg-[var(--macos-blue)]/10' : ''
                 }`}
                 onClick={handlePlay}
             >
                 {/* Leading Element - Queue Number */}
                 {context === 'queue' && queueIndex !== undefined && (
                     <div className="w-6 flex-shrink-0 text-center">
-                        <span className="text-[12px] text-muted-foreground">{queueIndex + 1}</span>
+                        <span className="text-[12px] text-muted-foreground">
+                            {queueIndex + 1}
+                        </span>
                     </div>
                 )}
 
@@ -212,10 +272,14 @@ export function TrackItem({
                     </div>
                     <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
                         <span className="truncate">{videoInfo.uploader}</span>
-                        {videoInfo.duration && (
+                        {context !== 'search' && (
                             <>
                                 <span>•</span>
-                                <span className="flex-shrink-0 text-[11px]">{formatDuration(videoInfo.duration)}</span>
+                                <span className="flex-shrink-0 text-[11px]">
+                                    {videoInfo.duration > 0
+                                        ? formatDuration(videoInfo.duration)
+                                        : '--:--'}
+                                </span>
                             </>
                         )}
                     </div>
@@ -231,7 +295,13 @@ export function TrackItem({
                         }}
                         disabled={isThisTrackLoading}
                         className="w-6 h-6 flex items-center justify-center hover-macos-button rounded disabled:cursor-not-allowed disabled:opacity-70"
-                        title={isThisTrackLoading ? 'Loading...' : isThisTrackPlaying ? 'Playing' : 'Play'}
+                        title={
+                            isThisTrackLoading
+                                ? 'Loading...'
+                                : isThisTrackPlaying
+                                  ? 'Playing'
+                                  : 'Play'
+                        }
                     >
                         {isThisTrackLoading ? (
                             <Loader2 className="w-4 h-4 text-foreground animate-spin" />
@@ -245,56 +315,66 @@ export function TrackItem({
                     {/* Note: "Add to Queue" button removed - queue is only populated via "Play All" in playlists */}
 
                     {/* Download Button - Only show if not already downloaded and finished checking */}
-                    {context !== 'queue' && !isDownloaded && !isCheckingDownload && (
-                        <button
-                            onClick={handleDownload}
-                            className="w-6 h-6 flex items-center justify-center hover-macos-button rounded relative"
-                            title={isDownloading ? `Downloading ${Math.round(downloadProgress * 100)}%` : "Download"}
-                            disabled={isDownloading}
-                        >
-                            {isDownloading ? (
-                                <div className="relative w-6 h-6 flex items-center justify-center">
-                                    {/* Background circle */}
-                                    <svg className="absolute w-6 h-6 -rotate-90">
-                                        <circle
-                                            cx="12"
-                                            cy="12"
-                                            r="10"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            fill="none"
-                                            className="text-muted-foreground/30"
-                                        />
-                                        <circle
-                                            cx="12"
-                                            cy="12"
-                                            r="10"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            fill="none"
-                                            strokeDasharray={`${2 * Math.PI * 10}`}
-                                            strokeDashoffset={`${2 * Math.PI * 10 * (1 - downloadProgress)}`}
-                                            className="text-[var(--macos-blue)] transition-all duration-300"
-                                            strokeLinecap="round"
-                                        />
-                                    </svg>
-                                    {/* Percentage text */}
-                                    <span className="text-[8px] font-bold text-[var(--macos-blue)]">
-                                        {Math.round(downloadProgress * 100)}
-                                    </span>
-                                </div>
-                            ) : (
-                                <Download className="w-4 h-4 text-foreground" />
-                            )}
-                        </button>
-                    )}
+                    {context !== 'queue' &&
+                        !isDownloaded &&
+                        !isCheckingDownload && (
+                            <button
+                                onClick={handleDownload}
+                                className="w-6 h-6 flex items-center justify-center hover-macos-button rounded relative"
+                                title={
+                                    isDownloading
+                                        ? `Downloading ${Math.round(downloadProgress * 100)}%`
+                                        : 'Download'
+                                }
+                                disabled={isDownloading}
+                            >
+                                {isDownloading ? (
+                                    <div className="relative w-6 h-6 flex items-center justify-center">
+                                        {/* Background circle */}
+                                        <svg className="absolute w-6 h-6 -rotate-90">
+                                            <circle
+                                                cx="12"
+                                                cy="12"
+                                                r="10"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                fill="none"
+                                                className="text-muted-foreground/30"
+                                            />
+                                            <circle
+                                                cx="12"
+                                                cy="12"
+                                                r="10"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                fill="none"
+                                                strokeDasharray={`${2 * Math.PI * 10}`}
+                                                strokeDashoffset={`${2 * Math.PI * 10 * (1 - downloadProgress)}`}
+                                                className="text-[var(--macos-blue)] transition-all duration-300"
+                                                strokeLinecap="round"
+                                            />
+                                        </svg>
+                                        {/* Percentage text */}
+                                        <span className="text-[8px] font-bold text-[var(--macos-blue)]">
+                                            {Math.round(downloadProgress * 100)}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <Download className="w-4 h-4 text-foreground" />
+                                )}
+                            </button>
+                        )}
 
                     {/* Favorite Toggle - All contexts except playlist */}
                     {context !== 'playlist' && (
                         <button
                             onClick={handleToggleFavorite}
                             className="w-6 h-6 flex items-center justify-center hover-macos-button rounded group/heart"
-                            title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+                            title={
+                                isFavorite
+                                    ? 'Remove from Favorites'
+                                    : 'Add to Favorites'
+                            }
                         >
                             {isFavorite ? (
                                 <Heart className="w-4 h-4 text-macos-red fill-[var(--macos-red)]" />
@@ -305,18 +385,19 @@ export function TrackItem({
                     )}
 
                     {/* Remove Button - Queue and Playlist context */}
-                    {(context === 'queue' || context === 'playlist') && onRemove && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onRemove()
-                            }}
-                            className="w-6 h-6 flex items-center justify-center hover-macos-button rounded"
-                            title="Remove"
-                        >
-                            <Trash className="w-4 h-4 text-macos-red" />
-                        </button>
-                    )}
+                    {(context === 'queue' || context === 'playlist') &&
+                        onRemove && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    onRemove()
+                                }}
+                                className="w-6 h-6 flex items-center justify-center hover-macos-button rounded"
+                                title="Remove"
+                            >
+                                <Trash className="w-4 h-4 text-macos-red" />
+                            </button>
+                        )}
                 </div>
             </div>
 
@@ -329,7 +410,9 @@ export function TrackItem({
                         // Trigger a re-check of favorites after modal closes
                         if (onToggleFavorite) {
                             // Parent component should handle refreshing favorites
-                            window.dispatchEvent(new CustomEvent('favorites-updated'))
+                            window.dispatchEvent(
+                                new CustomEvent('favorites-updated')
+                            )
                         }
                     }}
                 />

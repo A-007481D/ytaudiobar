@@ -285,10 +285,14 @@ export function HomePage() {
             // Only use results if this is still the current request
             if (searchRequestIdRef.current === currentRequestId) {
                 console.log(
-                    `✅ Search request #${currentRequestId} completed with ${results.length} results`
+                    `⚡ Fast search completed in request #${currentRequestId} with ${results.length} results (durations loading...)`
                 )
+
+                // Show results immediately (duration will be 0 initially)
                 setSearchResults(results)
                 setIsSearching(false)
+
+                // Durations will be fetched on-demand when items become visible
             } else {
                 console.log(
                     `🚫 Ignoring stale search request #${currentRequestId} (current: #${searchRequestIdRef.current})`
