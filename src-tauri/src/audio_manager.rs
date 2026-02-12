@@ -652,21 +652,111 @@ fn audio_thread(
         // Check if track has ended (sink is empty)
         if let Some(sink) = &current_sink {
             if sink.empty() && position_timer.is_playing() {
-                println!("🏁 Track ended (sink empty)");
-                position_timer.stop();
-                // Keep current_samples so we can restart the track if user presses play
+                let current_pos = position_timer.current_position();
+                let duration = state.blocking_lock().duration;
 
-                let mut state_guard = state.blocking_lock();
-                let duration = state_guard.duration;
-                state_guard.is_playing = false;
-                state_guard.current_position = duration; // Set to exact duration
-                drop(state_guard);
+                // Only trigger "track ended" if position is actually near the end
+                if duration <= 0.0 || current_pos >= duration - 3.0 {
+                    println!("🏁 Track ended (sink empty)");
+                    position_timer.stop();
 
-                // Emit both state change and track-ended event
-                let _ = state_change_tx.send(());
-                let _ = track_ended_tx.send(()); // Notify that track ended for auto-play
+                    let mut state_guard = state.blocking_lock();
+                    state_guard.is_playing = false;
+                    state_guard.current_position = duration;
+                    drop(state_guard);
 
-                current_sink = None; // Clear sink to stop the empty check, but samples remain
+                    let _ = state_change_tx.send(());
+                    let _ = track_ended_tx.send(());
+
+                    current_sink = None;
+                } else {
+                    // Stream died prematurely - auto-retry from current position
+                    println!("⚠️ Stream ended prematurely at {:.1}s (duration: {:.1}s) - auto-retrying", current_pos, duration);
+
+                    if let Some(mut child) = current_ffmpeg_child.take() {
+                        let _ = child.kill();
+                    }
+                    current_sink = None;
+
+                    // Auto-retry: restart stream from current position
+                    if let Some(audio_url) = &current_audio_url {
+                        let pos_str = format!("{:.3}", current_pos);
+                        let mut child = match command_no_window_blocking(&AudioManager::get_ffmpeg_command())
+                            .args(&[
+                                "-ss", &pos_str,
+                                "-i", audio_url,
+                                "-f", "s16le",
+                                "-acodec", "pcm_s16le",
+                                "-ar", &SAMPLE_RATE.to_string(),
+                                "-ac", &CHANNELS.to_string(),
+                                "-loglevel", "error",
+                                "pipe:1",
+                            ])
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::null())
+                            .spawn()
+                        {
+                            Ok(child) => child,
+                            Err(e) => {
+                                eprintln!("❌ Auto-retry failed: {}", e);
+                                position_timer.pause();
+                                let mut state_guard = state.blocking_lock();
+                                state_guard.is_playing = false;
+                                state_guard.current_position = current_pos;
+                                drop(state_guard);
+                                let _ = state_change_tx.send(());
+                                continue;
+                            }
+                        };
+
+                        let stdout = match child.stdout.take() {
+                            Some(stdout) => stdout,
+                            None => {
+                                eprintln!("❌ Failed to get ffmpeg stdout for retry");
+                                let _ = child.kill();
+                                position_timer.pause();
+                                let mut state_guard = state.blocking_lock();
+                                state_guard.is_playing = false;
+                                state_guard.current_position = current_pos;
+                                drop(state_guard);
+                                let _ = state_change_tx.send(());
+                                continue;
+                            }
+                        };
+
+                        let source = FfmpegStreamSource::new(stdout);
+                        let Ok(new_sink) = Sink::try_new(&stream_handle) else {
+                            eprintln!("❌ Failed to create sink for retry");
+                            let _ = child.kill();
+                            position_timer.pause();
+                            let mut state_guard = state.blocking_lock();
+                            state_guard.is_playing = false;
+                            state_guard.current_position = current_pos;
+                            drop(state_guard);
+                            let _ = state_change_tx.send(());
+                            continue;
+                        };
+
+                        let (volume, rate) = {
+                            let state_guard = state.blocking_lock();
+                            (state_guard.volume, state_guard.playback_rate)
+                        };
+
+                        new_sink.set_volume(volume);
+                        new_sink.set_speed(rate);
+                        new_sink.append(source.convert_samples::<f32>());
+                        new_sink.play();
+
+                        current_sink = Some(new_sink);
+                        current_ffmpeg_child = Some(child);
+
+                        // Keep timer running from current position
+                        position_timer.start(current_pos, rate);
+                        last_position_update = Instant::now();
+
+                        println!("✅ Stream auto-retried from {:.1}s", current_pos);
+                    }
+                }
             }
         }
 
