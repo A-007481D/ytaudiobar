@@ -22,7 +22,6 @@ import {
     playNext as playNextTrack,
     playPrevious as playPreviousTrack,
     seekTo,
-    updateMediaMetadata,
     updateMediaPlaybackState,
     clearMediaInfo,
     listenToMediaKeyToggle,
