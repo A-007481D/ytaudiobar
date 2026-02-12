@@ -43,6 +43,8 @@ export function HomePage() {
     const [currentTrack, setCurrentTrack] = useState<YTVideoInfo | null>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [audioState, setAudioState] = useState<AudioState | null>(null)
+    const positionRef = useRef(0) // Local position for keyboard seeking (ref = no stale closures)
+    const targetSeekRef = useRef<number | null>(null) // Target seek position (ref = always latest in listener)
     const [isInitializing, setIsInitializing] = useState(true)
     const [loadingStatus, setLoadingStatus] = useState<
         'checking' | 'downloading-ytdlp' | 'downloading-ffmpeg' | 'complete'
@@ -134,9 +136,33 @@ export function HomePage() {
     // Listen to playback state changes
     useEffect(() => {
         const unlisten = listenToPlaybackState((state) => {
-            setAudioState(state)
             setIsPlaying(state.is_playing)
             setStorePlaying(state.is_playing)
+
+            if (targetSeekRef.current !== null) {
+                // We're waiting for backend to catch up to our target position
+                if (
+                    Math.abs(state.current_position - targetSeekRef.current) <
+                    0.5
+                ) {
+                    // Backend caught up — accept real position
+                    targetSeekRef.current = null
+                    positionRef.current = state.current_position
+                    setAudioState(state)
+                } else {
+                    // Backend is stale — merge state but keep our optimistic position
+                    positionRef.current = targetSeekRef.current
+                    setAudioState({
+                        ...state,
+                        current_position: targetSeekRef.current
+                    })
+                }
+            } else {
+                // No active seeking — accept backend state fully
+                positionRef.current = state.current_position
+                setAudioState(state)
+            }
+
             if (state.current_track) {
                 setCurrentTrack(state.current_track)
                 setStoreTrack(state.current_track)
@@ -235,6 +261,56 @@ export function HomePage() {
             Promise.all(unlisteners).then((fns) => fns.forEach((fn) => fn()))
         }
     }, [isPlaying, audioState])
+
+    // Keyboard shortcuts - uses refs for position tracking to avoid stale closures
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Don't trigger if user is typing in an input/textarea
+            const target = e.target as HTMLElement
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                return
+            }
+
+            switch (e.key) {
+                case ' ': // Space bar - toggle play/pause
+                    e.preventDefault()
+                    togglePlayPause().catch(console.error)
+                    break
+                case 'ArrowLeft': // Left arrow - seek backward 5s
+                    e.preventDefault()
+                    if (audioState) {
+                        const newPosition = Math.max(0, positionRef.current - 5)
+                        positionRef.current = newPosition
+                        targetSeekRef.current = newPosition
+                        setAudioState({
+                            ...audioState,
+                            current_position: newPosition
+                        })
+                        seekTo(newPosition).catch(console.error)
+                    }
+                    break
+                case 'ArrowRight': // Right arrow - seek forward 5s
+                    e.preventDefault()
+                    if (audioState) {
+                        const newPosition = Math.min(
+                            audioState.duration,
+                            positionRef.current + 5
+                        )
+                        positionRef.current = newPosition
+                        targetSeekRef.current = newPosition
+                        setAudioState({
+                            ...audioState,
+                            current_position: newPosition
+                        })
+                        seekTo(newPosition).catch(console.error)
+                    }
+                    break
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [audioState])
 
     // Handle search with debounce
     useEffect(() => {
