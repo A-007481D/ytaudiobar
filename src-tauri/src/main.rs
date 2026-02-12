@@ -95,7 +95,31 @@ async fn install_ffmpeg(app_handle: AppHandle) -> Result<(), String> {
 
 // Audio playback commands
 #[tauri::command]
-async fn play_track(track: YTVideoInfo, state: State<'_, AppState>) -> Result<(), String> {
+async fn play_track(mut track: YTVideoInfo, state: State<'_, AppState>) -> Result<(), String> {
+    // Stop current playback FIRST to avoid old track playing while new track is loading
+    let _ = state.audio.stop().await;
+
+    // Set loading state IMMEDIATELY for instant UI feedback
+    state.audio.set_loading_state(&track).await;
+
+    // If duration is 0, fetch full details
+    if track.duration == 0 {
+        println!("⏱️ Fetching duration for {} before playing...", track.id);
+        match get_video_details(track.id.clone(), state.clone()).await {
+            Ok(details) => {
+                track.duration = details.duration;
+                track.description = details.description;
+                println!("✅ Got duration: {}s", track.duration);
+                // Update duration in state
+                state.audio.update_track_duration(track.duration as f64).await;
+            }
+            Err(e) => {
+                eprintln!("⚠️ Failed to fetch details, playing anyway: {}", e);
+                // Continue playing even if fetching details fails
+            }
+        }
+    }
+
     // Check if track is downloaded and use local file if available
     if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
         println!("🎵 Playing from local file: {}", file_path);

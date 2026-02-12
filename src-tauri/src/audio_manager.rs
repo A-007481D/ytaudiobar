@@ -390,6 +390,24 @@ impl AudioManager {
         local_path.to_string_lossy().to_string()
     }
 
+    pub async fn set_loading_state(&self, track: &YTVideoInfo) {
+        let mut state = self.state.lock().await;
+        state.current_track = Some(track.clone());
+        state.is_loading = true;
+        state.is_playing = false;
+        state.current_position = 0.0;
+        state.duration = track.duration as f64;
+        drop(state);
+        self.emit_state_change().await;
+    }
+
+    pub async fn update_track_duration(&self, duration: f64) {
+        let mut state = self.state.lock().await;
+        state.duration = duration;
+        drop(state);
+        self.emit_state_change().await;
+    }
+
     pub async fn play(&self, track: YTVideoInfo) -> Result<(), String> {
         println!("🎵 Playing track: {}", track.title);
 

@@ -14,7 +14,6 @@ import {
     downloadTrack,
     isTrackDownloaded,
     getActiveDownloads,
-    getVideoDetails,
     type YTVideoInfo,
     type Track,
     formatDuration
@@ -174,31 +173,10 @@ export function TrackItem({
                 // Set loading state IMMEDIATELY for instant UI feedback
                 setLoadingTrack(videoInfo.id)
 
-                // If duration is 0 (from search results), fetch full details first
-                let trackToPlay = videoInfo
-                if (videoInfo.duration === 0) {
-                    console.log(
-                        `⏱️ Fetching duration for ${videoInfo.id} before playing...`
-                    )
-                    try {
-                        const details = await getVideoDetails(videoInfo.id)
-                        trackToPlay = {
-                            ...videoInfo,
-                            duration: details.duration,
-                            description: details.description
-                        }
-                    } catch (error) {
-                        console.error(
-                            'Failed to fetch details, playing anyway:',
-                            error
-                        )
-                        // Play anyway even if fetching details fails
-                    }
-                }
-
                 // Play track directly WITHOUT adding to queue
                 // Queue is only populated via "Play All" on playlists
-                await playTrack(trackToPlay)
+                // Backend will handle fetching details if duration is 0
+                await playTrack(videoInfo)
             }
         } catch (error) {
             console.error('Failed to play track:', error)
