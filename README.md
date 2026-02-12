@@ -1,107 +1,239 @@
-# Tauri: An Ultimate Project Template
+# YTAudioBar
 
-[![NPM Version](https://img.shields.io/npm/v/create-tauri-react)](https://www.npmjs.com/package/create-tauri-react)
-[![NPM Downloads](https://img.shields.io/npm/dm/create-tauri-react)](https://www.npmjs.com/package/create-tauri-react)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Release](https://img.shields.io/github/release/ilyassan/ytaudiobar.svg)](https://github.com/ilyassan/ytaudiobar/releases)
+[![Downloads](https://img.shields.io/github/downloads/ilyassan/ytaudiobar/total.svg)](https://github.com/ilyassan/ytaudiobar/releases)
 
-This template should help get you started developing with [Tauri](https://tauri.app), [React](https://reactjs.org), [Typescript](https://typescriptlang.org) and [Tailwind CSS](https://tailwindcss.com) (w/ [shadcn/ui](https://ui.shadcn.com/)) in [Vite](https://vitejs.dev).
+<div align="center">
+  <img src="app-icon.png" alt="YTAudioBar Logo" width="128" height="128">
+</div>
 
-The architecture is based on practices suggested by [@alan2207](https://github.com/alan2207) in his [bulletproof-react](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md).
+A feature-rich desktop application for streaming and downloading YouTube audio on Windows and Linux. Extract audio from YouTube videos, stream them directly, or download for offline listening with a Spotify-inspired interface.
 
-In addition, this template configures [ESLint](https://eslint.org/), [Prettier](https://prettier.io/), [Husky](https://typicode.github.io/husky/) and [Lint-staged](https://github.com/lint-staged/lint-staged) for pre-commits.
+**For the native macOS version, see [YTAudioBar-macos](https://github.com/ilyassan/YTAudioBar-macos)**
 
-![Demo Screenshot](./assets/demo.png)
+## Contents
 
-## Getting Started
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [System Requirements](#system-requirements)
+- [Development](#development)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Basics
+## Features
 
-Ensure that you have the [Tauri prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites) installed.
+- **Stream YouTube Audio** — Play high-quality audio directly from YouTube with intuitive playback controls
+- **Download for Offline** — Download tracks locally in FLAC format with automatic metadata
+- **Queue Management** — Build and manage playback queues on the fly
+- **Unlimited Playlists** — Create custom playlists and organize your music collection
+- **Fast Seeking** — Near-instant seeking in downloaded tracks using FLAC seek tables
+- **OS Media Controls** — Full integration with Windows SMTC and Linux media controls
+- **Media Key Support** — Control playback with media keys (Play, Pause, Next, Previous, Seek)
+- **Search Modes** — Toggle between general search and music-optimized search
+- **System Tray** — Minimize to system tray for always-on access
+- **Auto-start** — Optional automatic startup with your system
 
-#### Create a new project
+## Installation
+
+### Windows
+
+Download the latest `.exe` installer from [GitHub Releases](https://github.com/ilyassan/ytaudiobar/releases).
+
+1. Download `YTAudioBar_x64-setup.exe` from the latest release
+2. Run the installer
+3. On first launch, the app will automatically download `yt-dlp` and `ffmpeg` (~15 MB)
+
+Minimum requirements: Windows 10 or later
+
+### Linux
+
+Download the latest `.AppImage` from [GitHub Releases](https://github.com/ilyassan/ytaudiobar/releases).
+
+1. Download `YTAudioBar_*.AppImage` from the latest release
+2. Make it executable: `chmod +x YTAudioBar_*.AppImage`
+3. Run: `./YTAudioBar_*.AppImage`
+4. On first launch, the app will automatically download `yt-dlp` and `ffmpeg` (~15 MB)
+
+Minimum requirements: Ubuntu 20.04+ or equivalent
+
+#### Desktop Integration (Linux)
+
+Create a `.desktop` file for application menu integration:
 
 ```bash
-npx create-tauri-react@latest
+mkdir -p ~/.local/share/applications
+# Copy the AppImage to ~/.local/share/applications/
+# Create YTAudioBar.desktop with appropriate paths
 ```
 
-## What's included
+## Usage
 
-### Core
+### Basic Playback
 
-A basic Tauri setup with Vite, React, Typescript.
+1. Use the **Search** tab to find YouTube videos
+2. Click a result to start playback
+3. Use playback controls or media keys
+4. Adjust volume and seek through the track
 
-#### Tailwind CSS
+### Downloads
 
-A basic Tailwind CSS setup. Includes a `components.json` for Shadcn UI components.
+Switch to the **Downloads** tab to:
 
-### Dev Tools
+- View download progress
+- Download tracks for offline playback
+- Downloaded tracks support full seeking and faster playback
 
-#### Eslint 9
+### Playlists
 
-A new Eslint 9 setup with flat config. This will help you to keep your code clean and consistent.
+1. Click the **Playlists** tab
+2. Create new playlists with the `+` button
+3. Add tracks via the playlist icon during playback
+4. Organize your music collection
 
-#### Prettier
+### Settings
 
-A basic Prettier setup to keep your code formatted.
+Access **Settings** tab to:
 
-#### Husky + Lint-staged
+- Enable/disable auto-start on system boot
+- Configure output device (if available)
+- Adjust UI preferences
 
-Pre-commit hooks to run Eslint and Prettier on staged files.
+### Windows
 
-## How to use?
+- **OS:** Windows 10 or later (tested on Windows 11)
+- **RAM:** 256 MB minimum
+- **Disk Space:** ~5 MB for installation + 15 MB for runtime dependencies (downloaded on first launch)
 
-Once again, the architecture of the template is based on practices proposed by [@alan2207](https://github.com/alan2207) in his [bulletproof-react](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md).
+### Linux
 
-```
-src
-|
-+-- app               # application layer containing:
-|   |                 # this folder might differ based on the meta framework used
-|   +-- routes        # application routes / can also be pages
-|   +-- app.tsx       # main application component
-|   +-- provider.tsx  # application provider that wraps the entire application with different global providers - this might also differ based on meta framework used
-|   +-- router.tsx    # application router configuration
-+-- assets            # assets folder can contain all the static files such as images, fonts, etc.
-|
-+-- components        # shared components used across the entire application
-|
-+-- config            # global configurations, exported env variables etc.
-|
-+-- features          # feature based modules
-|
-+-- hooks             # shared hooks used across the entire application
-|
-+-- lib               # reusable libraries preconfigured for the application
-|
-+-- stores            # global state stores
-|
-+-- testing           # test utilities and mocks
-|
-+-- types             # shared types used across the application
-|
-+-- utils             # shared utility functions
-```
+- **OS:** Ubuntu 20.04+ or equivalent distribution
+- **RAM:** 256 MB minimum
+- **Disk Space:** ~70 MB for AppImage + 15 MB for runtime dependencies (downloaded on first launch)
+- **Dependencies:** libssl, libxcb (automatically handled by AppImage)
 
-```
-src/features/awesome-feature
-|
-+-- api         # exported API request declarations and api hooks related to a specific feature
-|
-+-- assets      # assets folder can contain all the static files for a specific feature
-|
-+-- components  # components scoped to a specific feature
-|
-+-- hooks       # hooks scoped to a specific feature
-|
-+-- stores      # state stores for a specific feature
-|
-+-- types       # typescript types used within the feature
-|
-+-- utils       # utility functions for a specific feature
+## Development
+
+### Prerequisites
+
+- Rust 1.70+ ([Install Rust](https://rustup.rs/))
+- Node.js 16+ ([Install Node.js](https://nodejs.org/))
+- Visual Studio Build Tools (Windows) or standard C compiler (Linux)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/ilyassan/ytaudiobar.git
+cd YTAudioBar-tauri
+
+# Install dependencies
+npm install
+
+# Install Rust dependencies
+cd src-tauri && cargo fetch && cd ..
 ```
 
-So, simply put:
+### Development Build
 
-- Define your app's routes in `src/app/router.tsx` and `src/app/routes/*` with minimal business logic.
-- The pages from the routes should be using `src/features` to build up functionality on the page.
-- The features should be using components from `src/components`, which are pure ui components (like [Shadcn UI](https://ui.shadcn.com/)) or layouts.
-- For an extended template, you can look up [`@MrLightful/powersync-tauri`](https://github.com/MrLightful/powersync-tauri), which also defines `src/config` and `src/hooks` examples.
+```bash
+# Run in development mode with hot reload
+npm run tauri dev
+```
+
+### Production Build
+
+```bash
+# Build optimized release
+npm run tauri build
+```
+
+### Type Checking
+
+```bash
+npx tsc --noEmit
+```
+
+### Technology Stack
+
+**Frontend:**
+
+- React
+- TypeScript
+- Tauri IPC
+- TailwindCSS
+
+**Backend:**
+
+- Tauri 2.x
+- Symphonia (audio decoding)
+- rodio (audio output)
+- SQLite
+- reqwest
+- yt-dlp
+- FFmpeg
+
+### Audio Pipeline
+
+```
+YouTube URL
+    ↓
+yt-dlp (extract stream)
+    ↓
+Symphonia (decode)
+    ↓
+rodio Sink (output)
+```
+
+### Playback Modes
+
+- **Downloaded Tracks:** File-based playback with fast seeking (<100ms) using FLAC seek tables
+- **Streamed Tracks:** Memory-buffered playback with seeking support (loads audio into memory)
+
+## Project Structure
+
+```
+src/                               Frontend (React)
+├── features/
+│   ├── player/                   Player UI components
+│   ├── search/                   Search functionality
+│   ├── queue/                    Queue management
+│   ├── playlists/                Playlist UI
+│   ├── downloads/                Downloads UI
+│   └── settings/                 Settings UI
+├── stores/                       State management (Zustand)
+├── lib/tauri.ts                  IPC bindings
+└── app/routes/home.tsx           Main page
+
+src-tauri/                        Backend (Rust)
+├── src/
+│   ├── main.rs                   App setup
+│   ├── audio_manager.rs          Audio playback
+│   ├── download_manager.rs       Downloads & FLAC conversion
+│   ├── media_key_manager.rs      OS media controls
+│   ├── database.rs               SQLite management
+│   └── models.rs                 Data structures
+└── Cargo.toml                    Rust dependencies
+```
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Related Projects
+
+- [YTAudioBar-macos](https://github.com/ilyassan/YTAudioBar-macos) — Native macOS version
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube audio extraction
+- [Tauri](https://tauri.app/) — Desktop app framework
+- [Symphonia](https://github.com/pdeljanov/symphonia) — Audio decoding library
+- [rodio](https://github.com/pdeljanov/rodio) — Audio output library
+
+---
+
+Made by Ilyass for the open source community
