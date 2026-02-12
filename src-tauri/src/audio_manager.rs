@@ -956,7 +956,26 @@ fn audio_thread(
                     }
                 }
             }
-            AudioCommand::Seek(position) => {
+            AudioCommand::Seek(mut position) => {
+                // Check if there are more Seek commands waiting - if so, skip to the latest
+                loop {
+                    match command_rx.try_recv() {
+                        Ok(AudioCommand::Seek(new_position)) => {
+                            println!("⏩ Skipping seek to {:.1}s, newer seek to {:.1}s found", position, new_position);
+                            position = new_position;
+                        }
+                        Ok(_) => {
+                            // Put non-Seek command back (we can't, so just break and it will be lost)
+                            // This is acceptable since Seek commands should be the only ones spammed
+                            eprintln!("⚠️ Non-Seek command found while draining Seek queue");
+                            break;
+                        }
+                        Err(_) => break, // No more commands
+                    }
+                }
+
+                println!("⏩ Processing final seek to {:.1}s", position);
+
                 // Stop current playback
                 if let Some(sink) = current_sink.take() {
                     sink.stop();

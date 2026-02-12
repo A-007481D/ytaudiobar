@@ -1,6 +1,25 @@
 import { useState, useEffect } from 'react'
-import { Play, Pause, SkipBack, SkipForward, Minimize2, MinusCircle, PlusCircle, Loader2 } from 'lucide-react'
-import { togglePlayPause, playPrevious, playNext, seekTo, setPlaybackSpeed, formatTime, type AudioState } from '@/lib/tauri'
+import {
+    Play,
+    Pause,
+    SkipBack,
+    SkipForward,
+    Minimize2,
+    MinusCircle,
+    PlusCircle,
+    Loader2,
+    RotateCcw,
+    RotateCw
+} from 'lucide-react'
+import {
+    togglePlayPause,
+    playPrevious,
+    playNext,
+    seekTo,
+    setPlaybackSpeed,
+    formatTime,
+    type AudioState
+} from '@/lib/tauri'
 import { ScrollingText } from '@/components/scrolling-text'
 
 interface ExpandedPlayerProps {
@@ -8,18 +27,25 @@ interface ExpandedPlayerProps {
     onCollapse: () => void
 }
 
-export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) {
+export function ExpandedPlayer({
+    audioState,
+    onCollapse
+}: ExpandedPlayerProps) {
     const [position, setPosition] = useState(audioState.current_position)
     const [playbackRate, setPlaybackRate] = useState(audioState.playback_rate)
     const [isSeeking, setIsSeeking] = useState(false)
     const [isSeekingBackend, setIsSeekingBackend] = useState(false)
-    const [targetSeekPosition, setTargetSeekPosition] = useState<number | null>(null)
+    const [targetSeekPosition, setTargetSeekPosition] = useState<number | null>(
+        null
+    )
 
     useEffect(() => {
         // If we're waiting for backend to catch up to our target position
         if (targetSeekPosition !== null) {
             // Check if backend has caught up (within 0.5 seconds)
-            if (Math.abs(audioState.current_position - targetSeekPosition) < 0.5) {
+            if (
+                Math.abs(audioState.current_position - targetSeekPosition) < 0.5
+            ) {
                 setTargetSeekPosition(null)
                 setPosition(audioState.current_position)
             }
@@ -58,6 +84,36 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
         }
     }
 
+    const handleSeekBackward = async () => {
+        const newPosition = Math.max(0, position - 5)
+        setPosition(newPosition)
+        setTargetSeekPosition(newPosition)
+        setIsSeekingBackend(true)
+        try {
+            await seekTo(newPosition)
+        } catch (error) {
+            console.error('Failed to seek backward:', error)
+            setTargetSeekPosition(null)
+        } finally {
+            setIsSeekingBackend(false)
+        }
+    }
+
+    const handleSeekForward = async () => {
+        const newPosition = Math.min(audioState.duration, position + 5)
+        setPosition(newPosition)
+        setTargetSeekPosition(newPosition)
+        setIsSeekingBackend(true)
+        try {
+            await seekTo(newPosition)
+        } catch (error) {
+            console.error('Failed to seek forward:', error)
+            setTargetSeekPosition(null)
+        } finally {
+            setIsSeekingBackend(false)
+        }
+    }
+
     // Update visual position while dragging (no seek yet)
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newPosition = parseFloat(e.target.value)
@@ -70,7 +126,11 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
     }
 
     // Commit the seek (mouse up / touch end)
-    const handleSeekEnd = async (e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>) => {
+    const handleSeekEnd = async (
+        e:
+            | React.MouseEvent<HTMLInputElement>
+            | React.TouchEvent<HTMLInputElement>
+    ) => {
         const target = e.currentTarget as HTMLInputElement
         const newPosition = parseFloat(target.value)
 
@@ -100,7 +160,8 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
         }
     }
 
-    const progress = audioState.duration > 0 ? (position / audioState.duration) * 100 : 0
+    const progress =
+        audioState.duration > 0 ? (position / audioState.duration) * 100 : 0
 
     return (
         <div className="border-t border-macos-separator bg-card flex-shrink-0 px-4 py-4">
@@ -132,7 +193,7 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                 )}
 
                 {/* Control Buttons */}
-                <div className="flex items-center justify-center gap-6 mb-4">
+                <div className="flex items-center justify-center gap-4 mb-4">
                     {/* Previous */}
                     <button
                         onClick={handlePrevious}
@@ -142,11 +203,34 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                         <SkipBack className="w-5 h-5 text-foreground fill-foreground" />
                     </button>
 
+                    {/* Seek Backward 5s */}
+                    <button
+                        onClick={handleSeekBackward}
+                        className="w-9 h-9 flex items-center justify-center hover-macos-button rounded-full relative disabled:opacity-50"
+                        aria-label="Rewind 5 seconds"
+                        disabled={
+                            audioState.is_loading ||
+                            isSeekingBackend ||
+                            audioState.duration === 0
+                        }
+                    >
+                        <RotateCcw className="w-5 h-5 text-foreground" />
+                        <span className="absolute text-[7px] font-bold text-foreground">
+                            5
+                        </span>
+                    </button>
+
                     {/* Play/Pause */}
                     <button
                         onClick={handleTogglePlayPause}
                         className="w-12 h-12 flex items-center justify-center rounded-full bg-[var(--macos-blue)] hover:opacity-90 transition-opacity"
-                        aria-label={audioState.is_loading || isSeekingBackend ? 'Loading...' : audioState.is_playing ? 'Pause' : 'Play'}
+                        aria-label={
+                            audioState.is_loading || isSeekingBackend
+                                ? 'Loading...'
+                                : audioState.is_playing
+                                  ? 'Pause'
+                                  : 'Play'
+                        }
                         disabled={audioState.is_loading || isSeekingBackend}
                     >
                         {audioState.is_loading || isSeekingBackend ? (
@@ -156,6 +240,23 @@ export function ExpandedPlayer({ audioState, onCollapse }: ExpandedPlayerProps) 
                         ) : (
                             <Play className="w-6 h-6 text-white fill-white ml-0.5" />
                         )}
+                    </button>
+
+                    {/* Seek Forward 5s */}
+                    <button
+                        onClick={handleSeekForward}
+                        className="w-9 h-9 flex items-center justify-center hover-macos-button rounded-full relative disabled:opacity-50"
+                        aria-label="Fast forward 5 seconds"
+                        disabled={
+                            audioState.is_loading ||
+                            isSeekingBackend ||
+                            audioState.duration === 0
+                        }
+                    >
+                        <RotateCw className="w-5 h-5 text-foreground" />
+                        <span className="absolute text-[7px] font-bold text-foreground">
+                            5
+                        </span>
                     </button>
 
                     {/* Next */}
