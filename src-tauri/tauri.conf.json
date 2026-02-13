@@ -53,13 +53,18 @@
         "title": "YTAudioBar",
         "width": 380,
         "height": 500,
-        "resizable": false,
+        "minWidth": 380,
+        "minHeight": 500,
+        "maxWidth": 800,
+        "maxHeight": 900,
+        "resizable": true,
+        "maximizable": false,
         "fullscreen": false,
         "decorations": false,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "visible": false,
         "center": false,
-        "skipTaskbar": true,
+        "skipTaskbar": false,
         "focus": false,
         "dragDropEnabled": false,
         "transparent": true,
@@ -74,6 +79,11 @@
           "windows": ["main"],
           "permissions": [
             "core:default",
+            "core:window:allow-start-dragging",
+            "core:window:allow-hide",
+            "core:window:allow-set-size",
+            "core:window:allow-set-position",
+            "core:window:allow-current-monitor",
             "core:event:allow-listen",
             "core:event:allow-emit",
             "shell:default",
@@ -94,7 +104,8 @@
             "autostart:default",
             "autostart:allow-enable",
             "autostart:allow-disable",
-            "autostart:allow-is-enabled"
+            "autostart:allow-is-enabled",
+            "window-state:default"
           ]
         }
       ]

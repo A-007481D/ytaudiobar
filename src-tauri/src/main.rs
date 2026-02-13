@@ -55,6 +55,30 @@ async fn cancel_search() -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn reset_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    use tauri::{PhysicalPosition, LogicalSize};
+    let _ = window.set_size(LogicalSize::new(380.0f64, 500.0f64));
+    if let Ok(Some(monitor)) = window.current_monitor() {
+        let screen = monitor.size();
+        let scale = monitor.scale_factor();
+        let win_w = (380.0 * scale) as i32;
+        let win_h = (500.0 * scale) as i32;
+        #[cfg(target_os = "windows")]
+        {
+            let x = screen.width as i32 - win_w - 5;
+            let y = screen.height as i32 - win_h - 80;
+            let _ = window.set_position(PhysicalPosition::new(x, y));
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let x = screen.width as i32 - win_w - 30;
+            let _ = window.set_position(PhysicalPosition::new(x, 40i32));
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_video_details(
     video_id: String,
     state: State<'_, AppState>,
@@ -711,6 +735,7 @@ async fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![])))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(app_state)
         .setup(move |app| {
             // Window positioning is handled later in setup with manual calculations
@@ -844,19 +869,6 @@ async fn main() {
                             if window.is_visible().unwrap_or(false) {
                                 let _ = window.hide();
                             } else {
-                                // Position window in bottom-right before showing
-                                #[cfg(target_os = "windows")]
-                                {
-                                    use tauri::PhysicalPosition;
-                                    if let Ok(Some(monitor)) = window.current_monitor() {
-                                        let screen_size = monitor.size();
-                                        if let Ok(window_size) = window.outer_size() {
-                                            let x = screen_size.width as i32 - window_size.width as i32 - 5;
-                                            let y = screen_size.height as i32 - window_size.height as i32 - 80;
-                                            let _ = window.set_position(PhysicalPosition::new(x, y));
-                                        }
-                                    }
-                                }
                                 let _ = window.show().and_then(|_| window.set_focus());
                             }
                         }
@@ -903,7 +915,7 @@ async fn main() {
                 }
             }
 
-            // Show and focus window on first launch so auto-hide on blur works
+            // Show and focus window on launch
             let _ = window.show().and_then(|_| window.set_focus());
 
             Ok(())
@@ -913,10 +925,6 @@ async fn main() {
                 // Hide window instead of closing
                 let _ = window.hide();
                 api.prevent_close();
-            }
-            WindowEvent::Focused(false) => {
-                // Auto-hide when clicking outside (loses focus)
-                let _ = window.hide();
             }
             _ => {}
         })
@@ -975,6 +983,8 @@ async fn main() {
             update_media_metadata,
             update_media_playback_state,
             clear_media_info,
+            // Window commands
+            reset_window,
             // Updater commands
             check_for_updates_manual
         ])

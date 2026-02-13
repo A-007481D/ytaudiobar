@@ -1,4 +1,6 @@
-import { X, Music } from 'lucide-react'
+import { X, Music, Minus, RotateCcw } from 'lucide-react'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { invoke } from '@tauri-apps/api/core'
 
 interface AppHeaderProps {
     query: string
@@ -16,11 +18,35 @@ export function AppHeader({
     return (
         <div className="flex-shrink-0 bg-background">
             {/* App Title Section - Draggable area */}
-            <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <div
+                className="px-4 pt-4 pb-3 flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+                onMouseDown={(e) => {
+                    if (e.button === 0) getCurrentWindow().startDragging()
+                }}
+            >
                 <img src="/icon.png" alt="YTAudioBar" className="w-5 h-5" />
                 <h1 className="text-[15px] font-semibold text-foreground">
                     YTAudioBar
                 </h1>
+                <div
+                    className="ml-auto flex items-center gap-1"
+                    onMouseDown={(e) => e.stopPropagation()}
+                >
+                    <button
+                        onClick={() => invoke('reset_window')}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                        title="Reset position & size"
+                    >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => getCurrentWindow().hide()}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                        title="Minimize"
+                    >
+                        <Minus className="w-3.5 h-3.5" />
+                    </button>
+                </div>
             </div>
 
             {/* Search Bar Section */}
