@@ -185,6 +185,7 @@ export const updateMediaPlaybackState = (
         duration
     })
 export const clearMediaInfo = () => invoke<void>('clear_media_info')
+export const reinitAudio = () => invoke<void>('reinit_audio')
 
 // ===== EVENTS =====
 export const listenToPlaybackState = (

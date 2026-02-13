@@ -15,7 +15,7 @@ import {
     SelectContent,
     SelectItem,
     SelectTrigger,
-    SelectValue,
+    SelectValue
 } from '@/components/ui/select'
 
 const AUDIO_QUALITY_OPTIONS = [
@@ -23,7 +23,7 @@ const AUDIO_QUALITY_OPTIONS = [
     { value: '320', label: '320 kbps' },
     { value: '256', label: '256 kbps' },
     { value: '192', label: '192 kbps' },
-    { value: '128', label: '128 kbps' },
+    { value: '128', label: '128 kbps' }
 ]
 
 export function SettingsTab() {
@@ -104,12 +104,16 @@ export function SettingsTab() {
         setUpdateMessage('Checking for updates...')
         try {
             await checkForUpdatesManual()
-            setUpdateMessage('Update check complete! Check console logs for details.')
+            setUpdateMessage(
+                'Update check complete! Check console logs for details.'
+            )
             // Clear message after 5 seconds
             setTimeout(() => setUpdateMessage(''), 5000)
         } catch (error) {
             console.error('Failed to check for updates:', error)
-            setUpdateMessage('Failed to check for updates. See console for details.')
+            setUpdateMessage(
+                'Failed to check for updates. See console for details.'
+            )
             setTimeout(() => setUpdateMessage(''), 5000)
         } finally {
             setIsCheckingUpdates(false)
@@ -119,7 +123,9 @@ export function SettingsTab() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-full">
-                <div className="text-[13px] text-muted-foreground">Loading settings...</div>
+                <div className="text-[13px] text-muted-foreground">
+                    Loading settings...
+                </div>
             </div>
         )
     }
@@ -129,7 +135,9 @@ export function SettingsTab() {
             <div className="p-5">
                 {/* Downloads Section */}
                 <section className="mb-8">
-                    <h2 className="text-[20px] font-semibold text-foreground mb-4">Downloads</h2>
+                    <h2 className="text-[20px] font-semibold text-foreground mb-4">
+                        Downloads
+                    </h2>
 
                     {/* Download Location */}
                     <div className="mb-4">
@@ -144,7 +152,9 @@ export function SettingsTab() {
                                 onClick={handleChangeDownloadLocation}
                                 disabled={isMigrating}
                                 className={`px-4 py-2 bg-secondary hover-macos-button rounded-lg text-[13px] text-foreground font-medium transition-colors flex items-center gap-2 ${
-                                    isMigrating ? 'opacity-50 cursor-not-allowed' : ''
+                                    isMigrating
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : ''
                                 }`}
                             >
                                 <Folder className="w-4 h-4" />
@@ -161,7 +171,10 @@ export function SettingsTab() {
                         <label className="block text-[13px] font-medium text-foreground mb-2">
                             Audio Quality
                         </label>
-                        <Select value={audioQuality} onValueChange={handleQualityChange}>
+                        <Select
+                            value={audioQuality}
+                            onValueChange={handleQualityChange}
+                        >
                             <SelectTrigger className="w-full bg-secondary hover:bg-secondary/80 border-none text-[13px]">
                                 <SelectValue placeholder="Select quality" />
                             </SelectTrigger>
@@ -188,7 +201,9 @@ export function SettingsTab() {
 
                 {/* About Section */}
                 <section>
-                    <h2 className="text-[20px] font-semibold text-foreground mb-4">About</h2>
+                    <h2 className="text-[20px] font-semibold text-foreground mb-4">
+                        About
+                    </h2>
 
                     {/* App Version */}
                     <div className="mb-4">
@@ -207,9 +222,13 @@ export function SettingsTab() {
                             disabled={isCheckingUpdates}
                             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--macos-blue)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
-                            <RefreshCw className={`w-4 h-4 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                                className={`w-4 h-4 ${isCheckingUpdates ? 'animate-spin' : ''}`}
+                            />
                             <span className="text-[13px] font-medium">
-                                {isCheckingUpdates ? 'Checking...' : 'Check for Updates'}
+                                {isCheckingUpdates
+                                    ? 'Checking...'
+                                    : 'Check for Updates'}
                             </span>
                         </button>
                         {updateMessage && (

@@ -95,6 +95,11 @@ impl DownloadManager {
         println!("Initialized download manager with {} existing downloads", completed.len());
     }
 
+    pub async fn set_downloads_dir_silent(&self, path: PathBuf) {
+        std::fs::create_dir_all(&path).ok();
+        *self.downloads_dir.lock().await = path;
+    }
+
     pub async fn get_downloads_dir(&self) -> PathBuf {
         self.downloads_dir.lock().await.clone()
     }

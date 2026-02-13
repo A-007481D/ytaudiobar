@@ -2,6 +2,7 @@ use crate::models::{AudioState, YTVideoInfo};
 use crate::ytdlp_installer::YTDLPInstaller;
 use crate::ffmpeg_installer::FfmpegInstaller;
 use crate::command_utils::command_no_window_blocking;
+use cpal::traits::{DeviceTrait, HostTrait};
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink, Source};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -302,6 +303,7 @@ enum AudioCommand {
     Seek(f64), // position in seconds
     SetVolume(f32),
     SetPlaybackRate(f32),
+    ReinitAudio,
 }
 
 pub struct AudioManager {
@@ -523,6 +525,10 @@ impl AudioManager {
         Ok(())
     }
 
+    pub async fn reinit_audio(&self) {
+        let _ = self.command_tx.send(AudioCommand::ReinitAudio);
+    }
+
     pub async fn get_state(&self) -> AudioState {
         self.state.lock().await.clone()
     }
@@ -622,6 +628,12 @@ impl PlaybackTimer {
     }
 }
 
+fn get_default_device_name() -> Option<String> {
+    cpal::default_host()
+        .default_output_device()
+        .and_then(|d| d.name().ok())
+}
+
 // The dedicated audio thread - owns OutputStream and Sink
 fn audio_thread(
     mut command_rx: mpsc::UnboundedReceiver<AudioCommand>,
@@ -630,7 +642,7 @@ fn audio_thread(
     track_ended_tx: std_mpsc::Sender<()>,
 ) {
     // Create audio output stream once for this thread
-    let Ok((_stream, stream_handle)) = OutputStream::try_default() else {
+    let Ok((mut _stream, mut stream_handle)) = OutputStream::try_default() else {
         eprintln!("❌ Failed to create audio output");
         return;
     };
@@ -643,11 +655,14 @@ fn audio_thread(
     let mut current_ffmpeg_child: Option<std::process::Child> = None; // ffmpeg process to kill on stop
     let mut position_timer = PlaybackTimer::new(); // Track playback position
     let mut last_position_update = Instant::now();
+    let mut last_device_check = Instant::now();
+    let mut last_known_device = get_default_device_name();
+    let mut pending_command: Option<AudioCommand> = None;
 
     // Process commands with polling to allow periodic position updates
     loop {
-        // Try to receive a command (non-blocking)
-        let command = command_rx.try_recv().ok();
+        // Try to receive a command (pending_command takes priority)
+        let command = pending_command.take().map(Some).unwrap_or_else(|| command_rx.try_recv().ok());
 
         // Check if track has ended (sink is empty)
         if let Some(sink) = &current_sink {
@@ -780,6 +795,43 @@ fn audio_thread(
             }
             let _ = state_change_tx.send(());
             last_position_update = Instant::now();
+        }
+
+        // Check for audio device changes every 2 seconds
+        if last_device_check.elapsed() > std::time::Duration::from_secs(2) {
+            last_device_check = Instant::now();
+            let current_device = get_default_device_name();
+            if current_device != last_known_device {
+                println!("🔊 Audio device changed ({:?} → {:?}), reinitializing...", last_known_device, current_device);
+                last_known_device = current_device;
+
+                let current_pos = position_timer.current_position();
+                let was_playing = position_timer.is_playing();
+
+                if let Ok((new_stream, new_handle)) = OutputStream::try_default() {
+                    _stream = new_stream;
+                    stream_handle = new_handle;
+
+                    // Stop old sink and ffmpeg
+                    if let Some(sink) = current_sink.take() {
+                        sink.stop();
+                    }
+                    if let Some(mut child) = current_ffmpeg_child.take() {
+                        let _ = child.kill();
+                    }
+
+                    if was_playing {
+                        if current_audio_url.is_some() {
+                            // URL streams: dropping the sink triggers the premature-end
+                            // auto-retry logic on the next loop iteration automatically
+                        } else if current_file_path.is_some() || current_samples.is_some() {
+                            // File/memory: schedule a seek to restore playback position
+                            pending_command = Some(AudioCommand::Seek(current_pos));
+                        }
+                    }
+                    println!("✅ Audio device reinitialized successfully");
+                }
+            }
         }
 
         let Some(command) = command else {
@@ -1379,6 +1431,37 @@ fn audio_thread(
                     // Update position timer with new rate
                     position_timer.set_rate(rate);
                 }
+            }
+            AudioCommand::ReinitAudio => {
+                // Stop current playback
+                if let Some(sink) = current_sink.take() {
+                    sink.stop();
+                }
+                if let Some(mut child) = current_ffmpeg_child.take() {
+                    let _ = child.kill();
+                }
+                position_timer.stop();
+                current_samples = None;
+                current_file_path = None;
+                current_audio_url = None;
+
+                // Reinitialize audio output device
+                match OutputStream::try_default() {
+                    Ok((new_stream, new_handle)) => {
+                        _stream = new_stream;
+                        stream_handle = new_handle;
+                        println!("✅ Audio output device reinitialized");
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Failed to reinitialize audio device: {}", e);
+                    }
+                }
+
+                let mut state_guard = state.blocking_lock();
+                state_guard.is_playing = false;
+                state_guard.current_track = None;
+                drop(state_guard);
+                let _ = state_change_tx.send(());
             }
         }
     }

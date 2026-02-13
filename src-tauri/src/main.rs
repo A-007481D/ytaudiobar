@@ -20,7 +20,7 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::database::DatabaseManager;
-use crate::models::{AudioState, Playlist, RepeatMode, Track, YTVideoInfo};
+use crate::models::{AppSettings, AudioState, Playlist, RepeatMode, Track, YTVideoInfo};
 use crate::ytdlp_manager::YTDLPManager;
 use crate::ytdlp_installer::YTDLPInstaller;
 use crate::ffmpeg_installer::FfmpegInstaller;
@@ -51,6 +51,12 @@ async fn search_youtube(
 #[tauri::command]
 async fn cancel_search() -> Result<(), String> {
     YTDLPManager::cancel_search().await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn reinit_audio(state: State<'_, AppState>) -> Result<(), String> {
+    state.audio.reinit_audio().await;
     Ok(())
 }
 
@@ -454,9 +460,13 @@ async fn get_downloads_directory(state: State<'_, AppState>) -> Result<String, S
 
 #[tauri::command]
 async fn set_downloads_directory(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    use std::path::PathBuf;
-    let path_buf = PathBuf::from(path);
-    state.downloads.set_downloads_dir(path_buf).await
+    let path_buf = std::path::PathBuf::from(&path);
+    state.downloads.set_downloads_dir(path_buf).await?;
+    if let Ok(mut settings) = state.db.load_settings().await.map_err(|e| e.to_string()) {
+        settings.default_download_path = path;
+        let _ = state.db.save_settings(&settings).await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -466,7 +476,12 @@ async fn get_audio_quality(state: State<'_, AppState>) -> Result<String, String>
 
 #[tauri::command]
 async fn set_audio_quality(quality: String, state: State<'_, AppState>) -> Result<(), String> {
-    state.downloads.set_audio_quality(quality).await
+    state.downloads.set_audio_quality(quality.clone()).await?;
+    if let Ok(mut settings) = state.db.load_settings().await.map_err(|e| e.to_string()) {
+        settings.preferred_audio_quality = quality;
+        let _ = state.db.save_settings(&settings).await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -719,6 +734,19 @@ async fn main() {
     // Create app state
     let audio_manager = Arc::new(AudioManager::new());
     let download_manager = Arc::new(DownloadManager::new());
+
+    // Apply persisted settings (downloads dir, audio quality)
+    if let Ok(settings) = db.load_settings().await {
+        if !settings.default_download_path.is_empty() {
+            let path = std::path::PathBuf::from(&settings.default_download_path);
+            if path.exists() {
+                download_manager.set_downloads_dir_silent(path).await;
+            }
+        }
+        if !settings.preferred_audio_quality.is_empty() {
+            let _ = download_manager.set_audio_quality(settings.preferred_audio_quality).await;
+        }
+    }
     let media_key_manager = Arc::new(MediaKeyManager::new());
     let app_state = AppState {
         audio: Arc::clone(&audio_manager),
@@ -989,6 +1017,7 @@ async fn main() {
             clear_media_info,
             // Window commands
             reset_window,
+            reinit_audio,
             // Updater commands
             check_for_updates_manual
         ])
