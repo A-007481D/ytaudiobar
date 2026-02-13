@@ -132,7 +132,13 @@ async fn play_track(mut track: YTVideoInfo, state: State<'_, AppState>) -> Resul
     // Set loading state IMMEDIATELY for instant UI feedback
     state.audio.set_loading_state(&track).await;
 
-    // If duration is 0, fetch full details
+    // Check local file FIRST — no network needed for downloaded tracks
+    if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
+        println!("🎵 Playing from local file: {}", file_path);
+        return state.audio.play_from_file(track, file_path).await;
+    }
+
+    // Not downloaded — fetch duration if missing before streaming
     if track.duration == 0 {
         println!("⏱️ Fetching duration for {} before playing...", track.id);
         match get_video_details(track.id.clone(), state.clone()).await {
@@ -140,25 +146,15 @@ async fn play_track(mut track: YTVideoInfo, state: State<'_, AppState>) -> Resul
                 track.duration = details.duration;
                 track.description = details.description;
                 println!("✅ Got duration: {}s", track.duration);
-                // Update duration in state
                 state.audio.update_track_duration(track.duration as f64).await;
             }
             Err(e) => {
                 eprintln!("⚠️ Failed to fetch details, playing anyway: {}", e);
-                // Continue playing even if fetching details fails
             }
         }
     }
 
-    // Check if track is downloaded and use local file if available
-    if let Some(file_path) = state.downloads.get_downloaded_file_path(&track.id).await {
-        println!("🎵 Playing from local file: {}", file_path);
-        state.audio.play_from_file(track, file_path).await
-    } else {
-        // Play track directly WITHOUT adding to queue
-        // Queue is only populated via "Play All" playlist action
-        state.audio.play(track).await
-    }
+    state.audio.play(track).await
 }
 
 #[tauri::command]

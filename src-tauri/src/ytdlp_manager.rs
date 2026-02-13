@@ -338,7 +338,10 @@ impl YTDLPManager {
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown")
                 .to_string(),
-            duration: json.get("duration").and_then(|v| v.as_i64()).unwrap_or(0),
+            duration: json.get("duration")
+                .and_then(|v| v.as_f64())
+                .map(|f| f as i64)
+                .unwrap_or(0),
             thumbnail_url: json
                 .get("thumbnails")
                 .and_then(|v| v.as_array())
