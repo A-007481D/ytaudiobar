@@ -40,9 +40,9 @@ A feature-rich desktop application for streaming and downloading YouTube audio o
 
 ### Windows
 
-Download the latest `.exe` installer from [GitHub Releases](https://github.com/ilyassan/ytaudiobar/releases).
+Download the latest `.exe` installer from [GitHub Releases](https://github.com/ilyassan/ytaudiobar/releases) or the [official website](https://ytaudiobar.vercel.app/download).
 
-1. Download `YTAudioBar_x64-setup.exe` from the latest release
+1. Download `YTAudioBar_x64-setup.exe`
 2. Run the installer
 3. On first launch, the app will automatically download `yt-dlp` and `ffmpeg` (~15 MB)
 
@@ -50,9 +50,9 @@ Minimum requirements: Windows 10 or later
 
 ### Linux
 
-Download the latest `.AppImage` from [GitHub Releases](https://github.com/ilyassan/ytaudiobar/releases).
+Download the latest `.AppImage` from [GitHub Releases](https://github.com/ilyassan/ytaudiobar/releases) or the [official website](https://ytaudiobar.vercel.app/download).
 
-1. Download `YTAudioBar_*.AppImage` from the latest release
+1. Download `YTAudioBar_*.AppImage`
 2. Make it executable: `chmod +x YTAudioBar_*.AppImage`
 3. Run: `./YTAudioBar_*.AppImage`
 4. On first launch, the app will automatically download `yt-dlp` and `ffmpeg` (~15 MB)
