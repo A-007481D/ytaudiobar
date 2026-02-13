@@ -1,4 +1,4 @@
-import { X, Music, Minus, RotateCcw } from 'lucide-react'
+import { X, Music, Minus, Move } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -37,10 +37,10 @@ export function AppHeader({
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                         title="Reset position & size"
                     >
-                        <RotateCcw className="w-3.5 h-3.5" />
+                        <Move className="w-3.5 h-3.5" />
                     </button>
                     <button
-                        onClick={() => getCurrentWindow().hide()}
+                        onClick={() => getCurrentWindow().minimize()}
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                         title="Minimize"
                     >
