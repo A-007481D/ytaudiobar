@@ -866,10 +866,14 @@ async fn main() {
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
-                                let _ = window.hide();
+                            let is_minimized = window.is_minimized().unwrap_or(false);
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            if is_visible && !is_minimized {
+                                let _ = window.minimize();
                             } else {
-                                let _ = window.show().and_then(|_| window.set_focus());
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
                             }
                         }
                     }
