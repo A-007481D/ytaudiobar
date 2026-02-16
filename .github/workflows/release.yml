@@ -25,6 +25,12 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
+            - name: Install build tools (Linux container only)
+              if: matrix.platform == 'linux'
+              run: |
+                  apt-get update
+                  apt-get install -y curl wget build-essential libssl-dev pkg-config libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
@@ -32,12 +38,6 @@ jobs:
 
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
-
-            - name: Install dependencies (Ubuntu only)
-              if: matrix.platform == 'linux'
-              run: |
-                  apt-get update
-                  apt-get install -y curl wget build-essential libssl-dev pkg-config libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
             - name: Install frontend dependencies
               run: npm install
