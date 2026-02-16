@@ -32,7 +32,7 @@ jobs:
                   TZ: UTC
               run: |
                   apt-get update
-                  apt-get install -y -o Dpkg::Pre-Install-Pkgs::=/bin/true -o DPkg::Options::="--force-confnew" curl wget build-essential libssl-dev pkg-config libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+                  apt-get install -y -o Dpkg::Pre-Install-Pkgs::=/bin/true -o DPkg::Options::="--force-confnew" curl wget build-essential libssl-dev pkg-config libglib2.0-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
 
             - name: Setup Node.js
               uses: actions/setup-node@v4
