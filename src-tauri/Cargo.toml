@@ -1,6 +1,6 @@
 [package]
 name = "ytaudiobar"
-version = "1.4.27"
+version = "1.4.28"
 description = "YouTube Audio Player for Windows and Linux"
 authors = ["you"]
 edition = "2021"
