@@ -39,6 +39,23 @@ pub struct AppState {
     media_keys: Arc<MediaKeyManager>,
 }
 
+fn show_and_focus_window(window: &tauri::WebviewWindow) {
+    let _ = window.show();
+    let _ = window.unminimize();
+    // On Linux/Wayland the compositor ignores set_focus() without a user-interaction
+    // token. Briefly forcing always-on-top is the standard workaround to raise the window.
+    #[cfg(target_os = "linux")]
+    {
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_focus();
+        let _ = window.set_always_on_top(false);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = window.set_focus();
+    }
+}
+
 #[tauri::command]
 async fn search_youtube(
     query: String,
@@ -879,6 +896,9 @@ async fn main() {
             let _tray = TrayIconBuilder::new()
                 .icon(tray_icon)
                 .menu(&menu)
+                // On Linux (AppIndicator protocol), show_menu_on_left_click is ignored
+                // and the menu always appears on any click. We still set it false so that
+                // on DEs using StatusNotifierItem (KDE, etc.) left-click shows the window.
                 .show_menu_on_left_click(false)
                 .tooltip("YTAudioBar")
                 .on_tray_icon_event(|tray, event| {
@@ -893,11 +913,13 @@ async fn main() {
                             let is_minimized = window.is_minimized().unwrap_or(false);
                             let is_visible = window.is_visible().unwrap_or(false);
                             if is_visible && !is_minimized {
+                                #[cfg(not(target_os = "linux"))]
                                 let _ = window.minimize();
+                                // On Linux don't minimize — left click should always show
+                                #[cfg(target_os = "linux")]
+                                show_and_focus_window(&window);
                             } else {
-                                let _ = window.show();
-                                let _ = window.unminimize();
-                                let _ = window.set_focus();
+                                show_and_focus_window(&window);
                             }
                         }
                     }
@@ -908,7 +930,7 @@ async fn main() {
                     }
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show().and_then(|_| window.set_focus());
+                            show_and_focus_window(&window);
                         }
                     }
                     _ => {}
