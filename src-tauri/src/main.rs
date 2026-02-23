@@ -51,12 +51,17 @@ fn show_and_focus_window(window: &tauri::WebviewWindow) {
     // The only reliable workaround: hide() first to reset the WM state,
     // then unminimize() → set_focus() → show() so the WM treats it as a
     // fresh window appearance and raises it properly.
+    // We save and restore the position because hide() causes the WM to forget it.
     #[cfg(target_os = "linux")]
     {
+        let pos = window.outer_position().ok();
         let _ = window.hide();
         let _ = window.unminimize();
         let _ = window.set_focus();
         let _ = window.show();
+        if let Some(pos) = pos {
+            let _ = window.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+        }
     }
 }
 
