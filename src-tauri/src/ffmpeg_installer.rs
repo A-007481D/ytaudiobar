@@ -57,9 +57,9 @@ impl FfmpegInstaller {
         Self::get_ffmpeg_path().exists()
     }
 
-    /// Check if ffmpeg is available (either system or local)
+    /// Check if our local ffmpeg is available
     pub async fn is_available() -> bool {
-        Self::is_system_ffmpeg_available().await || Self::is_local_ffmpeg_installed().await
+        Self::is_local_ffmpeg_installed().await
     }
 
     async fn download_with_progress(app_handle: &AppHandle) -> Result<(), String> {
@@ -189,12 +189,8 @@ impl FfmpegInstaller {
         result
     }
 
-    /// Ensure ffmpeg is available (check system, then install if needed)
+    /// Ensure our local ffmpeg is available, downloading if needed
     pub async fn ensure_available(app_handle: &AppHandle) -> Result<(), String> {
-        if Self::is_system_ffmpeg_available().await {
-            return Ok(());
-        }
-
         if Self::is_local_ffmpeg_installed().await {
             return Ok(());
         }
