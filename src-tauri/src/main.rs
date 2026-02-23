@@ -42,17 +42,27 @@ pub struct AppState {
 fn show_and_focus_window(window: &tauri::WebviewWindow) {
     let _ = window.show();
     let _ = window.unminimize();
-    // On Linux/Wayland the compositor ignores set_focus() without a user-interaction
-    // token. Briefly forcing always-on-top is the standard workaround to raise the window.
-    #[cfg(target_os = "linux")]
-    {
-        let _ = window.set_always_on_top(true);
-        let _ = window.set_focus();
-        let _ = window.set_always_on_top(false);
-    }
     #[cfg(not(target_os = "linux"))]
     {
         let _ = window.set_focus();
+    }
+    // On Linux (X11 + Wayland), set_focus() alone doesn't raise the window.
+    // Workaround: set_always_on_top(true) forces the compositor to raise it,
+    // then we remove always_on_top after a short delay so it doesn't stay on top.
+    // The delay is critical — calling set_always_on_top(false) immediately cancels
+    // the raise before the window manager has time to process it.
+    #[cfg(target_os = "linux")]
+    {
+        let window = window.clone();
+        std::thread::spawn(move || {
+            // Brief pause so show/unminimize are processed first
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let _ = window.set_always_on_top(true);
+            let _ = window.set_focus();
+            // Hold always_on_top long enough for the WM to honour the raise
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let _ = window.set_always_on_top(false);
+        });
     }
 }
 
