@@ -1,3 +1,4 @@
+use crate::command_utils::command_no_window;
 use crate::models::YTVideoInfo;
 use crate::ytdlp_installer::YTDLPInstaller;
 use serde::{Deserialize, Serialize};
@@ -315,7 +316,7 @@ impl DownloadManager {
         let args_refs: Vec<&str> = ytdlp_args.iter().map(|s| s.as_str()).collect();
 
         // Use tokio::process::Command for proper async I/O
-        let mut child = tokio::process::Command::new(&ytdlp_path)
+        let mut child = command_no_window(&ytdlp_path.to_string_lossy())
             .args(&args_refs)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
