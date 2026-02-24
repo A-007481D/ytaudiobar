@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
     Play,
     Pause,
@@ -6,7 +6,8 @@ import {
     Trash,
     Loader2,
     Music,
-    Download
+    Download,
+    Link
 } from 'lucide-react'
 import {
     playTrack,
@@ -23,6 +24,7 @@ import {
     loadPlaylistsWithTrackData,
     type PlaylistWithData
 } from '@/features/playlists/playlist-selection-modal'
+import { Button } from '@/components/ui/button'
 import { usePlayerStore } from '@/stores/player-store'
 
 interface TrackItemProps {
@@ -53,6 +55,11 @@ export function TrackItem({
     const [isDownloading, setIsDownloading] = useState(false)
     const [downloadProgress, setDownloadProgress] = useState<number>(0)
     const [isCheckingDownload, setIsCheckingDownload] = useState(true)
+    const [contextMenu, setContextMenu] = useState<{
+        x: number
+        y: number
+    } | null>(null)
+    const contextMenuRef = useRef<HTMLDivElement>(null)
 
     // Convert Track to YTVideoInfo format
     const videoInfo: YTVideoInfo =
@@ -218,6 +225,32 @@ export function TrackItem({
         }
     }
 
+    const handleContextMenu = (e: React.MouseEvent) => {
+        e.preventDefault()
+        setContextMenu({ x: e.clientX, y: e.clientY })
+    }
+
+    const handleCopyLink = async () => {
+        const url = `https://www.youtube.com/watch?v=${videoInfo.id}`
+        await navigator.clipboard.writeText(url)
+        setContextMenu(null)
+    }
+
+    useEffect(() => {
+        if (!contextMenu) return
+        const handleClickOutside = (e: MouseEvent) => {
+            if (
+                contextMenuRef.current &&
+                !contextMenuRef.current.contains(e.target as Node)
+            ) {
+                setContextMenu(null)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () =>
+            document.removeEventListener('mousedown', handleClickOutside)
+    }, [contextMenu])
+
     return (
         <>
             <div
@@ -225,6 +258,7 @@ export function TrackItem({
                     isCurrentTrack ? 'bg-[var(--macos-blue)]/10' : ''
                 }`}
                 onClick={handlePlay}
+                onContextMenu={handleContextMenu}
             >
                 {/* Leading Element - Queue Number */}
                 {context === 'queue' && queueIndex !== undefined && (
@@ -391,6 +425,25 @@ export function TrackItem({
                         )}
                 </div>
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    ref={contextMenuRef}
+                    className="fixed z-50 bg-card border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                >
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCopyLink}
+                        className="w-full justify-start text-[13px] px-3"
+                    >
+                        <Link className="text-muted-foreground" />
+                        Copy link
+                    </Button>
+                </div>
+            )}
 
             {/* Playlist Selection Modal */}
             {showPlaylistModal && loadedPlaylists && (
