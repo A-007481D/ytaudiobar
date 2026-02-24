@@ -10,7 +10,7 @@ import {
     getAppVersion,
     checkForUpdatesManual,
     getAutostartEnabled,
-    setAutostartEnabled
+    setAutostartEnabled as saveAutostartEnabled
 } from '@/lib/tauri'
 import {
     Select,
@@ -66,7 +66,7 @@ export function SettingsTab() {
         const newValue = !autostartEnabled
         setAutostartEnabled(newValue)
         try {
-            await setAutostartEnabled(newValue)
+            await saveAutostartEnabled(newValue)
         } catch (error) {
             console.error('Failed to set autostart:', error)
             setAutostartEnabled(!newValue)
