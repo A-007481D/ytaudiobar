@@ -7,34 +7,23 @@ import {
     Pause,
     Loader2
 } from 'lucide-react'
-import {
-    togglePlayPause,
-    playPrevious,
-    playNext,
-    type YTVideoInfo
-} from '@/lib/tauri'
+import { playPrevious, playNext, type YTVideoInfo } from '@/lib/tauri'
 
 interface MiniPlayerProps {
     track: YTVideoInfo
     isPlaying: boolean
     isLoading: boolean
     onExpand: () => void
+    onTogglePlayPause: () => void
 }
 
 export function MiniPlayer({
     track,
     isPlaying,
     isLoading,
-    onExpand
+    onExpand,
+    onTogglePlayPause
 }: MiniPlayerProps) {
-    const handleTogglePlayPause = async () => {
-        try {
-            await togglePlayPause()
-        } catch (error) {
-            console.error('Failed to toggle play/pause:', error)
-        }
-    }
-
     const handlePrevious = async () => {
         try {
             await playPrevious()
@@ -87,7 +76,7 @@ export function MiniPlayer({
 
                 {/* Play/Pause - 18px */}
                 <button
-                    onClick={handleTogglePlayPause}
+                    onClick={onTogglePlayPause}
                     className="w-7 h-7 flex items-center justify-center hover-macos-button rounded"
                     aria-label={
                         isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'

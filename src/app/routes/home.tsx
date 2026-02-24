@@ -60,6 +60,24 @@ export function HomePage() {
         setLoadingTrack
     } = usePlayerStore()
 
+    // If the track has ended, replay from beginning instead of resuming at the end
+    const handleTogglePlayPause = async () => {
+        try {
+            if (
+                audioState &&
+                !audioState.is_playing &&
+                audioState.duration > 0 &&
+                audioState.current_position >= audioState.duration - 0.5
+            ) {
+                await seekTo(0) // backend seek auto-resumes playback
+                return
+            }
+            await togglePlayPause()
+        } catch (error) {
+            console.error('Failed to toggle play/pause:', error)
+        }
+    }
+
     // Search state (lifted from SearchTab to be accessible from Header)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMusicMode, setIsMusicMode] = useState(false)
@@ -410,6 +428,7 @@ export function HomePage() {
                             isPlaying={isPlaying}
                             isLoading={audioState?.is_loading || false}
                             onExpand={() => setIsExpanded(true)}
+                            onTogglePlayPause={handleTogglePlayPause}
                         />
                     ) : (
                         audioState && (

@@ -37,7 +37,6 @@ export function ExpandedPlayer({
     const [targetSeekPosition, setTargetSeekPosition] = useState<number | null>(
         null
     )
-
     useEffect(() => {
         // If we're waiting for backend to catch up to our target position
         if (targetSeekPosition !== null) {
@@ -61,6 +60,14 @@ export function ExpandedPlayer({
 
     const handleTogglePlayPause = async () => {
         try {
+            if (
+                !audioState.is_playing &&
+                audioState.duration > 0 &&
+                audioState.current_position >= audioState.duration - 0.5
+            ) {
+                await seekTo(0) // backend seek auto-resumes playback
+                return
+            }
             await togglePlayPause()
         } catch (error) {
             console.error('Failed to toggle play/pause:', error)
@@ -265,7 +272,23 @@ export function ExpandedPlayer({
                 </div>
 
                 {/* Progress Slider */}
-                <div className="mb-1">
+                <div className="relative mb-1 h-3 flex items-center">
+                    {/* Gray base track (unplayed) */}
+                    <div className="absolute inset-x-0 h-[6px] rounded-full bg-white/10" />
+
+                    {/* Blue fill (played portion) — same progress% as the dot */}
+                    <div
+                        className="absolute left-0 h-[6px] rounded-full bg-[var(--macos-blue)]"
+                        style={{ width: `${progress}%` }}
+                    />
+
+                    {/* Dot — always at the exact right edge of the blue fill */}
+                    <div
+                        className="absolute w-3 h-3 rounded-full bg-white shadow-md -translate-x-1/2"
+                        style={{ left: `${progress}%` }}
+                    />
+
+                    {/* Invisible range input on top for interaction */}
                     <input
                         type="range"
                         min="0"
@@ -277,17 +300,7 @@ export function ExpandedPlayer({
                         onTouchStart={handleSeekStart}
                         onTouchEnd={handleSeekEnd}
                         disabled={audioState.duration === 0}
-                        className="w-full h-[6px] bg-muted/30 rounded-full appearance-none cursor-pointer
-                                 [&::-webkit-slider-thumb]:appearance-none
-                                 [&::-webkit-slider-thumb]:w-3
-                                 [&::-webkit-slider-thumb]:h-3
-                                 [&::-webkit-slider-thumb]:rounded-full
-                                 [&::-webkit-slider-thumb]:bg-white
-                                 [&::-webkit-slider-thumb]:shadow-md
-                                 disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{
-                            background: `linear-gradient(to right, var(--macos-blue) ${progress}%, rgba(255,255,255,0.1) ${progress}%)`
-                        }}
+                        className="absolute inset-x-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed h-3"
                     />
                 </div>
 
