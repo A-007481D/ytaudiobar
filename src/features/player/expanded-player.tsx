@@ -4,7 +4,6 @@ import {
     Pause,
     SkipBack,
     SkipForward,
-    Minimize2,
     MinusCircle,
     PlusCircle,
     Loader2,
@@ -168,29 +167,24 @@ export function ExpandedPlayer({
         <div className="border-t border-macos-separator bg-card flex-shrink-0 px-4 py-4">
             {/* Content */}
             <div className="flex flex-col gap-3">
-                {/* Header with track info and collapse button */}
+                {/* Header with track info - clickable to collapse */}
                 {audioState.current_track && (
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex-1 min-w-0">
-                            <div className="mb-0.5">
-                                <ScrollingText
-                                    text={audioState.current_track.title}
-                                    className="text-[15px] font-semibold text-foreground"
-                                    speed={30}
-                                />
-                            </div>
-                            <p className="text-[13px] text-muted-foreground truncate">
-                                {audioState.current_track.uploader}
-                            </p>
+                    <button
+                        onClick={onCollapse}
+                        className="flex flex-col min-w-0 w-full text-left mb-3 px-1 py-1 rounded hover-macos-button cursor-pointer"
+                        aria-label="Collapse player"
+                    >
+                        <div className="mb-0.5 w-full">
+                            <ScrollingText
+                                text={audioState.current_track.title}
+                                className="text-[15px] font-semibold text-foreground"
+                                speed={30}
+                            />
                         </div>
-                        <button
-                            onClick={onCollapse}
-                            className="w-8 h-8 flex items-center justify-center hover-macos-button rounded flex-shrink-0"
-                            aria-label="Collapse player"
-                        >
-                            <Minimize2 className="w-3 h-3 text-muted-foreground" />
-                        </button>
-                    </div>
+                        <p className="text-[13px] text-muted-foreground truncate w-full">
+                            {audioState.current_track.uploader}
+                        </p>
+                    </button>
                 )}
 
                 {/* Control Buttons */}

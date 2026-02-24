@@ -1,5 +1,18 @@
-import { Volume2, VolumeX, SkipBack, SkipForward, Play, Pause, Maximize2, Loader2 } from 'lucide-react'
-import { togglePlayPause, playPrevious, playNext, type YTVideoInfo } from '@/lib/tauri'
+import {
+    Volume2,
+    VolumeX,
+    SkipBack,
+    SkipForward,
+    Play,
+    Pause,
+    Loader2
+} from 'lucide-react'
+import {
+    togglePlayPause,
+    playPrevious,
+    playNext,
+    type YTVideoInfo
+} from '@/lib/tauri'
 
 interface MiniPlayerProps {
     track: YTVideoInfo
@@ -8,8 +21,12 @@ interface MiniPlayerProps {
     onExpand: () => void
 }
 
-export function MiniPlayer({ track, isPlaying, isLoading, onExpand }: MiniPlayerProps) {
-
+export function MiniPlayer({
+    track,
+    isPlaying,
+    isLoading,
+    onExpand
+}: MiniPlayerProps) {
     const handleTogglePlayPause = async () => {
         try {
             await togglePlayPause()
@@ -45,10 +62,14 @@ export function MiniPlayer({ track, isPlaying, isLoading, onExpand }: MiniPlayer
                 )}
             </div>
 
-            {/* Track Info - Single line with separator */}
-            <div className="flex-1 min-w-0 text-[13px] text-foreground font-medium truncate">
+            {/* Track Info - clickable to expand */}
+            <button
+                onClick={onExpand}
+                className="flex-1 min-w-0 text-[13px] text-foreground font-medium truncate text-left px-1 py-1 rounded hover-macos-button cursor-pointer"
+                aria-label="Expand player"
+            >
                 {track.title} • {track.uploader}
-            </div>
+            </button>
 
             {/* Divider */}
             <div className="w-[1px] h-4 bg-muted-foreground/30" />
@@ -68,7 +89,9 @@ export function MiniPlayer({ track, isPlaying, isLoading, onExpand }: MiniPlayer
                 <button
                     onClick={handleTogglePlayPause}
                     className="w-7 h-7 flex items-center justify-center hover-macos-button rounded"
-                    aria-label={isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
+                    aria-label={
+                        isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'
+                    }
                     disabled={isLoading}
                 >
                     {isLoading ? (
@@ -89,18 +112,6 @@ export function MiniPlayer({ track, isPlaying, isLoading, onExpand }: MiniPlayer
                     <SkipForward className="w-[11px] h-[11px] text-foreground fill-foreground" />
                 </button>
             </div>
-
-            {/* Divider */}
-            <div className="w-[1px] h-4 bg-muted-foreground/30" />
-
-            {/* Expand Button - 11px */}
-            <button
-                onClick={onExpand}
-                className="w-6 h-6 flex items-center justify-center hover-macos-button rounded flex-shrink-0"
-                aria-label="Expand player"
-            >
-                <Maximize2 className="w-[11px] h-[11px] text-muted-foreground" />
-            </button>
         </div>
     )
 }
