@@ -252,6 +252,12 @@ export const formatTime = (seconds: number): string => {
     return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+// Autostart
+export const getAutostartEnabled = () =>
+    invoke<boolean>('get_autostart_enabled')
+export const setAutostartEnabled = (enabled: boolean) =>
+    invoke<void>('set_autostart_enabled', { enabled })
+
 // Check for updates manually
 export const checkForUpdatesManual = async (): Promise<void> => {
     console.log('🔍 Manual update check triggered...')

@@ -512,6 +512,21 @@ async fn get_app_version() -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn get_autostart_enabled(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_autostart_enabled(enabled: bool, app: AppHandle) -> Result<(), String> {
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable().map_err(|e| e.to_string())
+    } else {
+        manager.disable().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
 async fn check_for_updates_manual(app: tauri::AppHandle) -> Result<bool, String> {
     check_for_updates_silently(app).await;
     Ok(true)
@@ -1046,7 +1061,10 @@ async fn main() {
             reset_window,
             reinit_audio,
             // Updater commands
-            check_for_updates_manual
+            check_for_updates_manual,
+            // Autostart commands
+            get_autostart_enabled,
+            set_autostart_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

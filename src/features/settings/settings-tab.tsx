@@ -8,7 +8,9 @@ import {
     getAudioQuality,
     setAudioQuality as saveAudioQuality,
     getAppVersion,
-    checkForUpdatesManual
+    checkForUpdatesManual,
+    getAutostartEnabled,
+    setAutostartEnabled
 } from '@/lib/tauri'
 import {
     Select,
@@ -30,6 +32,7 @@ export function SettingsTab() {
     const [downloadLocation, setDownloadLocation] = useState('')
     const [audioQuality, setAudioQuality] = useState('best')
     const [appVersion, setAppVersion] = useState('1.0.0')
+    const [autostartEnabled, setAutostartEnabled] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [isMigrating, setIsMigrating] = useState(false)
     const [isCheckingUpdates, setIsCheckingUpdates] = useState(false)
@@ -39,14 +42,17 @@ export function SettingsTab() {
     useEffect(() => {
         const loadSettings = async () => {
             try {
-                const [location, quality, version] = await Promise.all([
-                    getDownloadsDirectory(),
-                    getAudioQuality(),
-                    getAppVersion()
-                ])
+                const [location, quality, version, autostart] =
+                    await Promise.all([
+                        getDownloadsDirectory(),
+                        getAudioQuality(),
+                        getAppVersion(),
+                        getAutostartEnabled()
+                    ])
                 setDownloadLocation(location)
                 setAudioQuality(quality)
                 setAppVersion(version)
+                setAutostartEnabled(autostart)
             } catch (error) {
                 console.error('Failed to load settings:', error)
             } finally {
@@ -55,6 +61,17 @@ export function SettingsTab() {
         }
         loadSettings()
     }, [])
+
+    const handleAutostartToggle = async () => {
+        const newValue = !autostartEnabled
+        setAutostartEnabled(newValue)
+        try {
+            await setAutostartEnabled(newValue)
+        } catch (error) {
+            console.error('Failed to set autostart:', error)
+            setAutostartEnabled(!newValue)
+        }
+    }
 
     const handleChangeDownloadLocation = async () => {
         try {
@@ -133,10 +150,10 @@ export function SettingsTab() {
     return (
         <div className="flex flex-col h-full overflow-y-auto bg-background">
             <div className="p-5">
-                {/* Downloads Section */}
+                {/* General Section */}
                 <section className="mb-8">
                     <h2 className="text-[20px] font-semibold text-foreground mb-4">
-                        Downloads
+                        General
                     </h2>
 
                     {/* Download Location */}
@@ -193,6 +210,36 @@ export function SettingsTab() {
                         <p className="text-[11px] text-muted-foreground mt-1">
                             Higher quality means larger file sizes
                         </p>
+                    </div>
+
+                    {/* Launch at Startup */}
+                    <div className="flex items-center justify-between py-2">
+                        <div>
+                            <div className="text-[13px] font-medium text-foreground">
+                                Launch at startup
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                                Automatically start YTAudioBar when your PC
+                                starts
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleAutostartToggle}
+                            className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                                autostartEnabled
+                                    ? 'bg-[var(--macos-blue)]'
+                                    : 'bg-white/20'
+                            }`}
+                            aria-label="Toggle launch at startup"
+                        >
+                            <span
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+                                    autostartEnabled
+                                        ? 'translate-x-5'
+                                        : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
                     </div>
                 </section>
 
