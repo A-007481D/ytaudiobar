@@ -57,7 +57,7 @@ Download the latest `.AppImage` from [GitHub Releases](https://github.com/ilyass
 3. Run: `./YTAudioBar_*.AppImage`
 4. On first launch, the app will automatically download `yt-dlp` and `ffmpeg` (~15 MB)
 
-Minimum requirements: Ubuntu 20.04+ or equivalent
+Minimum requirements: Ubuntu 22.04+ or equivalent
 
 #### Desktop Integration (Linux)
 
@@ -109,7 +109,7 @@ Access **Settings** tab to:
 
 ### Linux
 
-- **OS:** Ubuntu 20.04+ or equivalent distribution
+- **OS:** Ubuntu 22.04+ or equivalent distribution
 - **RAM:** 256 MB minimum
 - **Disk Space:** ~70 MB for AppImage + 15 MB for runtime dependencies (downloaded on first launch)
 - **Dependencies:** libssl, libxcb (automatically handled by AppImage)
