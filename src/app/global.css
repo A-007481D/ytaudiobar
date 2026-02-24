@@ -115,7 +115,7 @@
 
 @layer base {
     * {
-        @apply border-border outline-ring/50;
+        @apply border-border outline-none;
     }
     html {
         /* For native desktop app feeling disallow text selection. */
@@ -244,11 +244,6 @@
     }
     .hover-macos-button:active {
         background-color: oklch(1 0 0 / 20%);
-    }
-
-    /* Ensure consistent focus outlines across platforms */
-    *:focus-visible {
-        outline-offset: 2px;
     }
 
     /* Prevent text selection highlighting inconsistencies */

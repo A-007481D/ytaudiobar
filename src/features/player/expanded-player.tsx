@@ -133,6 +133,7 @@ export function ExpandedPlayer({
     ) => {
         const target = e.currentTarget as HTMLInputElement
         const newPosition = parseFloat(target.value)
+        target.blur() // Return focus to document so arrow key shortcuts work immediately
 
         // Keep slider at target position
         setPosition(newPosition)
