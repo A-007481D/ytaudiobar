@@ -396,6 +396,28 @@ impl YTDLPManager {
         Ok(())
     }
 
+    // Fetch basic info for a single video by ID — fast, same shallow flags as search
+    pub async fn get_video_info_fast(&self, video_id: String) -> Result<YTVideoInfo, String> {
+        let ytdlp_path = Self::get_ytdlp_path();
+        let url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+        let output = command_no_window(&ytdlp_path)
+            .args(["--flat-playlist", "-j", "--no-warnings", &url])
+            .output()
+            .await
+            .map_err(|e| format!("Failed to get video info: {}", e))?;
+
+        if !output.status.success() {
+            return Err("Failed to fetch video info".to_string());
+        }
+
+        let json: Value = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse video info: {}", e))?;
+
+        Self::parse_video_info(&json)
+            .ok_or_else(|| "Failed to parse video info".to_string())
+    }
+
     // Fetch detailed metadata for a single video (for lazy loading durations)
     pub async fn get_video_details(&self, video_id: String) -> Result<YTVideoInfo, String> {
         let ytdlp_path = Self::get_ytdlp_path();

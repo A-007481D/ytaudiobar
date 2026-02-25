@@ -20,7 +20,7 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::database::DatabaseManager;
-use crate::models::{AppSettings, AudioState, Playlist, RepeatMode, Track, YTVideoInfo};
+use crate::models::{AudioState, Playlist, RepeatMode, Track, YTVideoInfo};
 use crate::ytdlp_manager::YTDLPManager;
 use crate::ytdlp_installer::YTDLPInstaller;
 use crate::ffmpeg_installer::FfmpegInstaller;
