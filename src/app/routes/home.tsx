@@ -18,7 +18,7 @@ import {
     listenToPlaybackState,
     searchYoutube,
     cancelSearch,
-    getVideoDetails,
+    getVideoInfoFast,
     togglePlayPause,
     playNext as playNextTrack,
     playPrevious as playPreviousTrack,
@@ -386,7 +386,7 @@ export function HomePage() {
         const videoId = extractYouTubeId(query)
         if (videoId) {
             try {
-                const track = await getVideoDetails(videoId)
+                const track = await getVideoInfoFast(videoId)
                 if (searchRequestIdRef.current === currentRequestId) {
                     setSearchResults([track])
                     setIsSearching(false)

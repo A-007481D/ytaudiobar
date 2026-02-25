@@ -66,6 +66,8 @@ export const searchYoutube = (query: string, musicMode: boolean) =>
 export const cancelSearch = () => invoke<void>('cancel_search')
 export const getVideoDetails = (videoId: string) =>
     invoke<YTVideoInfo>('get_video_details', { videoId })
+export const getVideoInfoFast = (videoId: string) =>
+    invoke<YTVideoInfo>('get_video_info_fast', { videoId })
 
 // YTDLP
 export const checkYtdlpInstalled = () =>

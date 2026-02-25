@@ -119,6 +119,14 @@ async fn get_video_details(
 }
 
 #[tauri::command]
+async fn get_video_info_fast(
+    video_id: String,
+    state: State<'_, AppState>,
+) -> Result<YTVideoInfo, String> {
+    state.ytdlp.get_video_info_fast(video_id).await
+}
+
+#[tauri::command]
 async fn check_ytdlp_installed() -> Result<bool, String> {
     Ok(YTDLPInstaller::is_installed().await)
 }
@@ -1064,7 +1072,9 @@ async fn main() {
             check_for_updates_manual,
             // Autostart commands
             get_autostart_enabled,
-            set_autostart_enabled
+            set_autostart_enabled,
+            // Fast video info
+            get_video_info_fast
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
