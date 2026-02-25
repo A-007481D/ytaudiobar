@@ -18,6 +18,7 @@ import {
     listenToPlaybackState,
     searchYoutube,
     cancelSearch,
+    getVideoDetails,
     togglePlayPause,
     playNext as playNextTrack,
     playPrevious as playPreviousTrack,
@@ -350,6 +351,24 @@ export function HomePage() {
         }
     }, [searchQuery, isMusicMode])
 
+    const extractYouTubeId = (query: string): string | null => {
+        try {
+            const url = new URL(query.trim())
+            if (url.hostname === 'youtu.be')
+                return url.pathname.slice(1).split('?')[0]
+            if (url.hostname.endsWith('youtube.com')) {
+                const v = url.searchParams.get('v')
+                if (v) return v
+                // Handle /shorts/VIDEO_ID
+                const shortsMatch = url.pathname.match(/\/shorts\/([^/?]+)/)
+                if (shortsMatch) return shortsMatch[1]
+            }
+        } catch {
+            // Not a URL
+        }
+        return null
+    }
+
     const performSearch = async (query: string) => {
         if (!query.trim()) return
 
@@ -360,13 +379,27 @@ export function HomePage() {
         searchRequestIdRef.current += 1
         const currentRequestId = searchRequestIdRef.current
 
-        console.log(
-            `🔍 Starting search request #${currentRequestId} for: "${query}"`
-        )
-
         setIsSearching(true)
-        // Auto-switch to search tab when user starts searching
         setActiveTab('search')
+
+        // Detect YouTube URL — fetch that specific track directly
+        const videoId = extractYouTubeId(query)
+        if (videoId) {
+            try {
+                const track = await getVideoDetails(videoId)
+                if (searchRequestIdRef.current === currentRequestId) {
+                    setSearchResults([track])
+                    setIsSearching(false)
+                }
+            } catch (error) {
+                if (searchRequestIdRef.current === currentRequestId) {
+                    setSearchResults([])
+                    setIsSearching(false)
+                }
+            }
+            return
+        }
+
         try {
             const results = await searchYoutube(query, isMusicMode)
 
