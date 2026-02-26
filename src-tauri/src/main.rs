@@ -46,22 +46,18 @@ fn show_and_focus_window(window: &tauri::WebviewWindow) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
-    // On Linux, show() + set_focus() does NOT raise the window — the WM just
-    // adds it to the taskbar without bringing it to the front.
-    // Workaround: hide() first to reset WM state, then show() so the WM treats
-    // it as a fresh appearance and raises it. set_focus() must come AFTER show()
-    // so the WM can honour it — calling it on a hidden window causes the WM to
-    // deny the request and show a "YTAudioBar is ready" notification instead.
+    // On Linux, hide() + show() causes a startup notification ("App is ready")
+    // because the WM treats the remap as a fresh window appearance.
+    // Instead: unminimize + show first, then use set_always_on_top(true) to
+    // force the WM to raise the window above any fullscreen/focused app, grant
+    // focus, then remove always_on_top so it behaves normally afterwards.
     #[cfg(target_os = "linux")]
     {
-        let pos = window.outer_position().ok();
-        let _ = window.hide();
         let _ = window.unminimize();
         let _ = window.show();
+        let _ = window.set_always_on_top(true);
         let _ = window.set_focus();
-        if let Some(pos) = pos {
-            let _ = window.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-        }
+        let _ = window.set_always_on_top(false);
     }
 }
 
