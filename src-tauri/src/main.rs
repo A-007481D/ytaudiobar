@@ -46,17 +46,25 @@ fn show_and_focus_window(window: &tauri::WebviewWindow) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
-    // On Linux, hide() + show() causes a startup notification ("App is ready")
-    // because the WM treats the remap as a fresh window appearance.
-    // Instead: unminimize + show first, then use set_always_on_top(true) to
-    // force the WM to raise the window above any fullscreen/focused app, grant
-    // focus, then remove always_on_top so it behaves normally afterwards.
+    // On Linux, show() + set_focus() does NOT raise the window — the WM just
+    // adds it to the taskbar/dock without bringing it to the front.
+    // The only reliable workaround: hide() first to reset the WM state,
+    // then unminimize() → set_focus() → show() so the WM treats it as a
+    // fresh window appearance and raises it properly.
+    // We save and restore the position because hide() causes the WM to forget it.
+    // Finally, set_always_on_top(true/false) forces the window above any
+    // currently focused or fullscreen app.
     #[cfg(target_os = "linux")]
     {
+        let pos = window.outer_position().ok();
+        let _ = window.hide();
         let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_always_on_top(true);
         let _ = window.set_focus();
+        let _ = window.show();
+        if let Some(pos) = pos {
+            let _ = window.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+        }
+        let _ = window.set_always_on_top(true);
         let _ = window.set_always_on_top(false);
     }
 }
