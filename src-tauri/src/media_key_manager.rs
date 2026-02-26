@@ -1,7 +1,7 @@
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 pub struct MediaKeyManager {
     controls: Arc<Mutex<Option<MediaControls>>>,
@@ -25,7 +25,7 @@ impl MediaKeyManager {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
             if let Some(window) = app_handle.get_webview_window("main") {
-                let handle_result: Result<raw_window_handle::WindowHandle, raw_window_handle::HandleError> = window.window_handle();
+                let handle_result: Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> = window.window_handle();
                 match handle_result {
                     Ok(handle) => {
                         let raw: RawWindowHandle = handle.as_raw();

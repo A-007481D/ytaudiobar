@@ -94,7 +94,7 @@ async fn reset_window(window: tauri::WebviewWindow) -> Result<(), String> {
         let screen = monitor.size();
         let scale = monitor.scale_factor();
         let win_w = (380.0 * scale) as i32;
-        let _win_h = (500.0 * scale) as i32;
+        let win_h = (500.0 * scale) as i32;
         #[cfg(target_os = "windows")]
         {
             let x = screen.width as i32 - win_w - 5;
