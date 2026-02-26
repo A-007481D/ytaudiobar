@@ -971,7 +971,10 @@ async fn main() {
             // Get the main window
             let window = app.get_webview_window("main").unwrap();
 
-            // Position window near system tray
+            // Show window first so the WM maps it (Linux ignores set_position on hidden windows)
+            show_and_focus_window(&window);
+
+            // Position window after it's visible so the WM respects the coordinates
             {
                 use tauri::PhysicalPosition;
                 if let Some(monitor) = window.current_monitor()? {
@@ -995,9 +998,6 @@ async fn main() {
                     }
                 }
             }
-
-            // Show and focus window on launch
-            show_and_focus_window(&window);
 
             Ok(())
         })
