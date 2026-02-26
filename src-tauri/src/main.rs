@@ -808,7 +808,6 @@ async fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![])))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(app_state)
         .setup(move |app| {
             // Window positioning is handled later in setup with manual calculations

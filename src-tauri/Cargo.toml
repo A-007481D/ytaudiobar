@@ -32,7 +32,6 @@ raw-window-handle = "0.6"
 zip = "2.1"
 futures-util = "0.3"
 tauri-plugin-autostart = "2"
-tauri-plugin-window-state = "2"
 cpal = "0.15"
 
 
