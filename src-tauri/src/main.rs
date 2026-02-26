@@ -65,6 +65,7 @@ fn show_and_focus_window(window: &tauri::WebviewWindow) {
             let _ = window.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
         }
         let _ = window.set_always_on_top(true);
+        let _ = window.set_focus();
         let _ = window.set_always_on_top(false);
     }
 }
