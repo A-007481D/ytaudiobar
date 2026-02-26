@@ -46,14 +46,22 @@ fn show_and_focus_window(window: &tauri::WebviewWindow) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
-    // On Linux, hide() + show() triggers a startup notification from the WM.
-    // Instead, unminimize first, then show, then set_focus — this avoids the
-    // notification while still raising the window reliably.
+    // On Linux, show() + set_focus() does NOT raise the window — the WM just
+    // adds it to the taskbar without bringing it to the front.
+    // Workaround: hide() first to reset WM state, then show() so the WM treats
+    // it as a fresh appearance and raises it. set_focus() must come AFTER show()
+    // so the WM can honour it — calling it on a hidden window causes the WM to
+    // deny the request and show a "YTAudioBar is ready" notification instead.
     #[cfg(target_os = "linux")]
     {
+        let pos = window.outer_position().ok();
+        let _ = window.hide();
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        if let Some(pos) = pos {
+            let _ = window.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+        }
     }
 }
 
