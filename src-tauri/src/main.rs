@@ -979,26 +979,51 @@ async fn main() {
             // Show window first so the WM maps it (Linux ignores set_position on hidden windows)
             show_and_focus_window(&window);
 
-            // Position window after it's visible so the WM respects the coordinates
+            // Try to restore last saved geometry; fall back to default if none or off-screen
             {
-                use tauri::PhysicalPosition;
-                if let Some(monitor) = window.current_monitor()? {
-                    let screen_size = monitor.size();
-                    if let Ok(window_size) = window.outer_size() {
-                        #[cfg(target_os = "windows")]
-                        {
-                            // Bottom-right corner on Windows (near taskbar)
-                            let x = screen_size.width as i32 - window_size.width as i32 - 5;
-                            let y = screen_size.height as i32 - window_size.height as i32 - 80;
-                            let _ = window.set_position(PhysicalPosition::new(x, y));
-                        }
+                use tauri::{PhysicalPosition, PhysicalSize};
 
-                        #[cfg(target_os = "linux")]
-                        {
-                            // Top-right corner on Linux (near system tray)
-                            let x = screen_size.width as i32 - window_size.width as i32 - 30;
-                            let y = 40;
-                            let _ = window.set_position(PhysicalPosition::new(x, y));
+                let db = app.state::<AppState>().db.clone();
+                let saved = tokio::task::block_in_place(|| {
+                    tauri::async_runtime::block_on(db.load_window_geometry())
+                });
+                let mut restored = false;
+
+                if let Ok(Some((x, y, width, height))) = saved {
+                    // Check the saved position is on at least one available monitor
+                    let monitors = window.available_monitors().unwrap_or_default();
+                    let on_screen = monitors.iter().any(|m| {
+                        let mp = m.position();
+                        let ms = m.size();
+                        x >= mp.x && y >= mp.y
+                            && x < mp.x + ms.width as i32
+                            && y < mp.y + ms.height as i32
+                    });
+
+                    if on_screen {
+                        let _ = window.set_size(PhysicalSize::new(width, height));
+                        let _ = window.set_position(PhysicalPosition::new(x, y));
+                        restored = true;
+                    }
+                }
+
+                if !restored {
+                    // Default positioning
+                    if let Some(monitor) = window.current_monitor()? {
+                        let screen_size = monitor.size();
+                        if let Ok(window_size) = window.outer_size() {
+                            #[cfg(target_os = "windows")]
+                            {
+                                let x = screen_size.width as i32 - window_size.width as i32 - 5;
+                                let y = screen_size.height as i32 - window_size.height as i32 - 80;
+                                let _ = window.set_position(PhysicalPosition::new(x, y));
+                            }
+                            #[cfg(target_os = "linux")]
+                            {
+                                let x = screen_size.width as i32 - window_size.width as i32 - 30;
+                                let y = 40;
+                                let _ = window.set_position(PhysicalPosition::new(x, y));
+                            }
                         }
                     }
                 }
@@ -1008,7 +1033,13 @@ async fn main() {
         })
         .on_window_event(|window, event| match event {
             WindowEvent::CloseRequested { api, .. } => {
-                // Hide window instead of closing
+                // Save window geometry before hiding
+                if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
+                    let db = window.app_handle().state::<AppState>().db.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = db.save_window_geometry(pos.x, pos.y, size.width, size.height).await;
+                    });
+                }
                 let _ = window.hide();
                 api.prevent_close();
             }

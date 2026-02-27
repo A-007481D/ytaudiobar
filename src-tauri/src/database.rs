@@ -95,6 +95,12 @@ impl DatabaseManager {
         .execute(&self.pool)
         .await?;
 
+        // Migrate: add window geometry columns if they don't exist yet
+        let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_x INTEGER").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_y INTEGER").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_width INTEGER").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_height INTEGER").execute(&self.pool).await;
+
         // Create system "All Favorites" playlist if not exists
         self.create_system_playlist().await?;
 
@@ -309,5 +315,46 @@ impl DatabaseManager {
             preferred_audio_quality: r.get("preferred_audio_quality"),
             auto_update_ytdlp: r.get("auto_update_ytdlp"),
         }).unwrap_or_default())
+    }
+
+    pub async fn save_window_geometry(&self, x: i32, y: i32, width: u32, height: u32) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO app_settings (id, window_x, window_y, window_width, window_height)
+            VALUES ('default', ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                window_x = excluded.window_x,
+                window_y = excluded.window_y,
+                window_width = excluded.window_width,
+                window_height = excluded.window_height
+            "#
+        )
+        .bind(x)
+        .bind(y)
+        .bind(width as i64)
+        .bind(height as i64)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn load_window_geometry(&self) -> Result<Option<(i32, i32, u32, u32)>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT window_x, window_y, window_width, window_height FROM app_settings WHERE id = 'default'"
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|r| {
+            let x: Option<i64> = r.get("window_x");
+            let y: Option<i64> = r.get("window_y");
+            let w: Option<i64> = r.get("window_width");
+            let h: Option<i64> = r.get("window_height");
+            match (x, y, w, h) {
+                (Some(x), Some(y), Some(w), Some(h)) => Some((x as i32, y as i32, w as u32, h as u32)),
+                _ => None,
+            }
+        }))
     }
 }
