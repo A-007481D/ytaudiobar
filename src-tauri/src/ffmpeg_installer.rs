@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter};
 use crate::ytdlp_installer::DepProgress;
+use crate::command_utils::command_no_window;
 
 static INSTALL_LOCK: Lazy<Arc<Mutex<bool>>> = Lazy::new(|| Arc::new(Mutex::new(false)));
 
@@ -35,7 +36,7 @@ impl FfmpegInstaller {
 
     /// Check if system ffmpeg is available in PATH
     pub async fn is_system_ffmpeg_available() -> bool {
-        let result = tokio::process::Command::new("ffmpeg")
+        let result = command_no_window("ffmpeg")
             .arg("-version")
             .output()
             .await;

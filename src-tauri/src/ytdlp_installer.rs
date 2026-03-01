@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter};
+use crate::command_utils::command_no_window;
 
 static INSTALL_LOCK: Lazy<Arc<Mutex<bool>>> = Lazy::new(|| Arc::new(Mutex::new(false)));
 
@@ -153,7 +154,7 @@ impl YTDLPInstaller {
             return Err("yt-dlp not installed".to_string());
         }
 
-        let output = tokio::process::Command::new(&ytdlp_path)
+        let output = command_no_window(ytdlp_path.to_str().unwrap_or("yt-dlp"))
             .arg("--version")
             .output()
             .await
