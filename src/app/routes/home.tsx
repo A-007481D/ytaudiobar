@@ -35,6 +35,7 @@ import {
     type AudioState,
     type YTVideoInfo
 } from '@/lib/tauri'
+import { invoke } from '@tauri-apps/api/core'
 
 type TabName = 'search' | 'queue' | 'playlists' | 'downloads' | 'settings'
 
@@ -74,6 +75,7 @@ export function HomePage() {
                 return
             }
             await togglePlayPause()
+            setIsShrinked(false)
         } catch (error) {
             console.error('Failed to toggle play/pause:', error)
         }
@@ -82,6 +84,7 @@ export function HomePage() {
     // Search state (lifted from SearchTab to be accessible from Header)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMusicMode, setIsMusicMode] = useState(false)
+    const [isShrinked, setIsShrinked] = useState(false)
     const [searchResults, setSearchResults] = useState<YTVideoInfo[]>([])
     const [isSearching, setIsSearching] = useState(false)
     const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
@@ -443,13 +446,24 @@ export function HomePage() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-background select-none rounded-[12px] overflow-hidden border border-white/10">
+        <div
+            className={`
+            flex flex-col bg-background select-none rounded-[12px] overflow-hidden border border-white/10 + ' ' +
+            ${isShrinked ? '' : 'h-screen'}
+        `}
+        >
             {/* Header - App Title + Search Bar */}
             <AppHeader
                 query={searchQuery}
                 onQueryChange={setSearchQuery}
                 isMusicMode={isMusicMode}
+                isPlaying={isPlaying}
+                isShrinked={isShrinked}
                 onMusicModeToggle={() => setIsMusicMode(!isMusicMode)}
+                onIsShrinkedToggle={() => {
+                    setIsShrinked(!isShrinked)
+                    invoke('reset_window', { isShrinked: !isShrinked })
+                }}
             />
 
             {/* Player - appears below header when track is loaded */}
@@ -474,75 +488,79 @@ export function HomePage() {
                 </>
             )}
 
-            {/* Tab Navigation */}
-            <div className="flex border-b border-macos-separator bg-card flex-shrink-0">
-                <button
-                    onClick={() => setActiveTab('search')}
-                    className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
-                        activeTab === 'search'
-                            ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
-                            : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                    <span>Search</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('queue')}
-                    className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
-                        activeTab === 'queue'
-                            ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
-                            : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                    <span>Queue</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('playlists')}
-                    className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
-                        activeTab === 'playlists'
-                            ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
-                            : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                    <span>Playlists</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('downloads')}
-                    className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
-                        activeTab === 'downloads'
-                            ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
-                            : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                    <span>Downloads</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('settings')}
-                    className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
-                        activeTab === 'settings'
-                            ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
-                            : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                    <span>Settings</span>
-                </button>
-            </div>
+            {!isShrinked && (
+                <>
+                    {/* Tab Navigation */}
+                    <div className="flex border-b border-macos-separator bg-card flex-shrink-0">
+                        <button
+                            onClick={() => setActiveTab('search')}
+                            className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
+                                activeTab === 'search'
+                                    ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            <span>Search</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('queue')}
+                            className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
+                                activeTab === 'queue'
+                                    ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            <span>Queue</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('playlists')}
+                            className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
+                                activeTab === 'playlists'
+                                    ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            <span>Playlists</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('downloads')}
+                            className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
+                                activeTab === 'downloads'
+                                    ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            <span>Downloads</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('settings')}
+                            className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
+                                activeTab === 'settings'
+                                    ? 'text-[var(--macos-blue)] border-b-2 border-[var(--macos-blue)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            <span>Settings</span>
+                        </button>
+                    </div>
 
-            {/* Tab Content */}
-            <div className="flex-1 overflow-hidden">
-                {activeTab === 'search' && (
-                    <SearchTab
-                        query={searchQuery}
-                        isMusicMode={isMusicMode}
-                        results={searchResults}
-                        isSearching={isSearching}
-                    />
-                )}
-                {activeTab === 'queue' && <QueueTab />}
-                {activeTab === 'playlists' && <PlaylistsTab />}
-                {activeTab === 'downloads' && <DownloadsTab />}
-                {activeTab === 'settings' && <SettingsTab />}
-            </div>
+                    {/* Tab Content */}
+                    <div className="flex-1 overflow-hidden">
+                        {activeTab === 'search' && (
+                            <SearchTab
+                                query={searchQuery}
+                                isMusicMode={isMusicMode}
+                                results={searchResults}
+                                isSearching={isSearching}
+                            />
+                        )}
+                        {activeTab === 'queue' && <QueueTab />}
+                        {activeTab === 'playlists' && <PlaylistsTab />}
+                        {activeTab === 'downloads' && <DownloadsTab />}
+                        {activeTab === 'settings' && <SettingsTab />}
+                    </div>
+                </>
+            )}
         </div>
     )
 }
