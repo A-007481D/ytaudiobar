@@ -6,7 +6,6 @@ interface AppHeaderProps {
     query: string
     onQueryChange: (query: string) => void
     isMusicMode: boolean
-    isPlaying: boolean
     isShrinked: boolean
     onMusicModeToggle: () => void
     onIsShrinkedToggle: () => void
@@ -16,7 +15,6 @@ export function AppHeader({
     query,
     onQueryChange,
     isMusicMode,
-    isPlaying,
     isShrinked,
     onMusicModeToggle,
     onIsShrinkedToggle
@@ -38,19 +36,17 @@ export function AppHeader({
                     className="ml-auto flex items-center gap-1"
                     onMouseDown={(e) => e.stopPropagation()}
                 >
-                    {isPlaying && (
-                        <button
-                            onClick={onIsShrinkedToggle}
-                            className="w-6 h-6 flex items-center justify-center rounded transition-colors"
-                            title={isShrinked ? 'Expand' : 'Shrink'}
-                        >
-                            {isShrinked ? (
-                                <Expand className="w-4 h-4" />
-                            ) : (
-                                <Shrink className="w-4 h-4" />
-                            )}
-                        </button>
-                    )}
+                    <button
+                        onClick={onIsShrinkedToggle}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                        title={isShrinked ? 'Expand' : 'Shrink'}
+                    >
+                        {isShrinked ? (
+                            <Expand className="w-4 h-4" />
+                        ) : (
+                            <Shrink className="w-4 h-4" />
+                        )}
+                    </button>
                     <button
                         onClick={() => invoke('reset_window', { isShrinked })}
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"

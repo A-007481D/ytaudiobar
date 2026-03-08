@@ -75,7 +75,6 @@ export function HomePage() {
                 return
             }
             await togglePlayPause()
-            setIsShrinked(false)
         } catch (error) {
             console.error('Failed to toggle play/pause:', error)
         }
@@ -461,7 +460,6 @@ export function HomePage() {
                 query={searchQuery}
                 onQueryChange={setSearchQuery}
                 isMusicMode={isMusicMode}
-                isPlaying={isPlaying}
                 isShrinked={isShrinked}
                 onMusicModeToggle={() => setIsMusicMode(!isMusicMode)}
                 onIsShrinkedToggle={() => {
