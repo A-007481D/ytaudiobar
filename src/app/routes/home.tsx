@@ -217,6 +217,10 @@ export function HomePage() {
         }
     }, [audioState])
 
+    useEffect(() => {
+        setIsExpanded(false)
+    }, [isShrinked])
+
     // Listen to media key events
     useEffect(() => {
         const unlisteners: Promise<() => void>[] = []
@@ -474,14 +478,16 @@ export function HomePage() {
                             track={currentTrack}
                             isPlaying={isPlaying}
                             isLoading={audioState?.is_loading || false}
-                            onExpand={() => setIsExpanded(true)}
+                            onExpand={() => !isShrinked && setIsExpanded(true)}
                             onTogglePlayPause={handleTogglePlayPause}
                         />
                     ) : (
                         audioState && (
                             <ExpandedPlayer
                                 audioState={audioState}
-                                onCollapse={() => setIsExpanded(false)}
+                                onCollapse={() =>
+                                    !isShrinked && setIsExpanded(false)
+                                }
                             />
                         )
                     )}
