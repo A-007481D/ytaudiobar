@@ -1,4 +1,4 @@
-import { X, Music, Minus, Move } from 'lucide-react'
+import { X, Music, Minus, Move, Shrink, Expand } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -6,14 +6,18 @@ interface AppHeaderProps {
     query: string
     onQueryChange: (query: string) => void
     isMusicMode: boolean
+    isShrinked: boolean
     onMusicModeToggle: () => void
+    onIsShrinkedToggle: () => void
 }
 
 export function AppHeader({
     query,
     onQueryChange,
     isMusicMode,
-    onMusicModeToggle
+    isShrinked,
+    onMusicModeToggle,
+    onIsShrinkedToggle
 }: AppHeaderProps) {
     return (
         <div className="flex-shrink-0 bg-background">
@@ -33,7 +37,18 @@ export function AppHeader({
                     onMouseDown={(e) => e.stopPropagation()}
                 >
                     <button
-                        onClick={() => invoke('reset_window')}
+                        onClick={onIsShrinkedToggle}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                        title={isShrinked ? 'Expand' : 'Shrink'}
+                    >
+                        {isShrinked ? (
+                            <Expand className="w-4 h-4" />
+                        ) : (
+                            <Shrink className="w-4 h-4" />
+                        )}
+                    </button>
+                    <button
+                        onClick={() => invoke('reset_window', { isShrinked })}
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                         title="Reset position & size"
                     >
@@ -49,47 +64,51 @@ export function AppHeader({
                 </div>
             </div>
 
-            {/* Search Bar Section */}
-            <div className="px-4 pb-3">
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => onQueryChange(e.target.value)}
-                        placeholder={
-                            isMusicMode
-                                ? 'Search YouTube Music...'
-                                : 'Search YouTube...'
-                        }
-                        className="w-full px-3 py-2 pr-24 bg-secondary border-none rounded-lg text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[var(--macos-blue)]"
-                    />
-
-                    {/* Right side buttons */}
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        {query && (
-                            <button
-                                onClick={() => onQueryChange('')}
-                                className="w-5 h-5 flex items-center justify-center rounded-full hover-macos-button"
-                            >
-                                <X className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                        )}
-
-                        {/* Music Mode Toggle */}
-                        <button
-                            onClick={onMusicModeToggle}
-                            className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
+            {!isShrinked && (
+                /* Search Bar Section */
+                <div className="px-4 pb-3">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => onQueryChange(e.target.value)}
+                            placeholder={
                                 isMusicMode
-                                    ? 'text-[var(--macos-blue)]'
-                                    : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                            title={isMusicMode ? 'YouTube Music' : 'YouTube'}
-                        >
-                            <Music className="w-4 h-4" />
-                        </button>
+                                    ? 'Search YouTube Music...'
+                                    : 'Search YouTube...'
+                            }
+                            className="w-full px-3 py-2 pr-24 bg-secondary border-none rounded-lg text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[var(--macos-blue)]"
+                        />
+
+                        {/* Right side buttons */}
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                            {query && (
+                                <button
+                                    onClick={() => onQueryChange('')}
+                                    className="w-5 h-5 flex items-center justify-center rounded-full hover-macos-button"
+                                >
+                                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                                </button>
+                            )}
+
+                            {/* Music Mode Toggle */}
+                            <button
+                                onClick={onMusicModeToggle}
+                                className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
+                                    isMusicMode
+                                        ? 'text-[var(--macos-blue)]'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title={
+                                    isMusicMode ? 'YouTube Music' : 'YouTube'
+                                }
+                            >
+                                <Music className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     )
 }

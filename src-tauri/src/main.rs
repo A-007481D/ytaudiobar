@@ -92,14 +92,14 @@ async fn reinit_audio(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn reset_window(window: tauri::WebviewWindow) -> Result<(), String> {
+async fn reset_window(window: tauri::WebviewWindow, isShrinked:bool) -> Result<(), String> {
     use tauri::{PhysicalPosition, LogicalSize};
     let _ = window.set_size(LogicalSize::new(380.0f64, 500.0f64));
     if let Ok(Some(monitor)) = window.current_monitor() {
         let screen = monitor.size();
         let scale = monitor.scale_factor();
         let win_w = (380.0 * scale) as i32;
-        let win_h = (500.0 * scale) as i32;
+        let win_h = ((if isShrinked {100.0} else {500.0}) * scale) as i32;
         #[cfg(target_os = "windows")]
         {
             let x = screen.width as i32 - win_w - 5;
