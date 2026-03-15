@@ -84,6 +84,7 @@ export function HomePage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [isMusicMode, setIsMusicMode] = useState(false)
     const [isShrinked, setIsShrinked] = useState(false)
+    const [wasResetWhileShrunk, setWasResetWhileShrunk] = useState(false)
     const [searchResults, setSearchResults] = useState<YTVideoInfo[]>([])
     const [isSearching, setIsSearching] = useState(false)
     const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
@@ -472,9 +473,14 @@ export function HomePage() {
                 onIsShrinkedToggle={() => {
                     const newShrinked = !isShrinked
                     setIsShrinked(newShrinked)
-                    invoke('resize_window', {
-                        height: newShrinked ? 100.0 : 500.0
-                    })
+                    if (!newShrinked && wasResetWhileShrunk) {
+                        setWasResetWhileShrunk(false)
+                        invoke('reset_window', { height: 500.0 })
+                    } else {
+                        invoke('resize_window', {
+                            height: newShrinked ? 100.0 : 500.0
+                        })
+                    }
                 }}
                 onResetWindow={() => {
                     const height = isShrinked
@@ -483,6 +489,7 @@ export function HomePage() {
                             : 100.0
                         : 500.0
                     invoke('reset_window', { height })
+                    if (isShrinked) setWasResetWhileShrunk(true)
                 }}
             />
 
