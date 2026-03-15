@@ -1006,6 +1006,21 @@ async fn main() {
                 })
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => {
+                        // Save window geometry before quitting
+                        if let Some(window) = app.get_webview_window("main") {
+                            if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
+                                println!("📐 [QUIT] Saving geometry before exit: pos=({}, {}), size={}x{}", pos.x, pos.y, size.width, size.height);
+                                let db = app.state::<AppState>().db.clone();
+                                match tauri::async_runtime::block_on(
+                                    db.save_window_geometry(pos.x, pos.y, size.width, size.height)
+                                ) {
+                                    Ok(_) => println!("📐 [QUIT] Geometry saved successfully"),
+                                    Err(e) => println!("📐 [QUIT] ERROR saving geometry: {}", e),
+                                }
+                            } else {
+                                println!("📐 [QUIT] ERROR: could not get window position/size");
+                            }
+                        }
                         app.exit(0);
                     }
                     "show" => {
@@ -1033,9 +1048,18 @@ async fn main() {
                 });
                 let mut restored = false;
 
+                println!("📐 [STARTUP] Loading saved geometry from DB: {:?}", saved);
+
                 if let Ok(Some((x, y, width, height))) = saved {
+                    println!("📐 [STARTUP] Found saved geometry: pos=({}, {}), size={}x{}", x, y, width, height);
                     // Check the saved position is on at least one available monitor
                     let monitors = window.available_monitors().unwrap_or_default();
+                    println!("📐 [STARTUP] Available monitors: {}", monitors.len());
+                    for (i, m) in monitors.iter().enumerate() {
+                        let mp = m.position();
+                        let ms = m.size();
+                        println!("📐 [STARTUP]   Monitor {}: pos=({}, {}), size={}x{}", i, mp.x, mp.y, ms.width, ms.height);
+                    }
                     let on_screen = monitors.iter().any(|m| {
                         let mp = m.position();
                         let ms = m.size();
@@ -1043,29 +1067,39 @@ async fn main() {
                             && x < mp.x + ms.width as i32
                             && y < mp.y + ms.height as i32
                     });
+                    println!("📐 [STARTUP] on_screen check: {}", on_screen);
 
                     if on_screen {
+                        println!("📐 [STARTUP] Restoring geometry: set_size({}x{}), set_position({}, {})", width, height, x, y);
                         let _ = window.set_size(PhysicalSize::new(width, height));
                         let _ = window.set_position(PhysicalPosition::new(x, y));
                         restored = true;
+                    } else {
+                        println!("📐 [STARTUP] Saved position is OFF-SCREEN, using default");
                     }
+                } else {
+                    println!("📐 [STARTUP] No saved geometry found (first launch or DB error)");
                 }
 
                 if !restored {
+                    println!("📐 [STARTUP] Using DEFAULT positioning");
                     // First launch or off-screen: use default 500px max mode positioning
                     if let Some(monitor) = window.current_monitor()? {
                         let screen_size = monitor.size();
                         if let Ok(window_size) = window.outer_size() {
+                            println!("📐 [STARTUP] Screen: {}x{}, Window: {}x{}", screen_size.width, screen_size.height, window_size.width, window_size.height);
                             #[cfg(target_os = "windows")]
                             {
                                 let x = screen_size.width as i32 - window_size.width as i32 - 5;
                                 let y = screen_size.height as i32 - window_size.height as i32 - 80;
+                                println!("📐 [STARTUP] Default position: ({}, {})", x, y);
                                 let _ = window.set_position(PhysicalPosition::new(x, y));
                             }
                             #[cfg(target_os = "linux")]
                             {
                                 let x = screen_size.width as i32 - window_size.width as i32 - 30;
                                 let y = 40;
+                                println!("📐 [STARTUP] Default position: ({}, {})", x, y);
                                 let _ = window.set_position(PhysicalPosition::new(x, y));
                             }
                         }
@@ -1076,8 +1110,10 @@ async fn main() {
                     let is_mini = tokio::task::block_in_place(|| {
                         tauri::async_runtime::block_on(db2.load_mini_mode())
                     }).unwrap_or(false);
+                    println!("📐 [STARTUP] Mini mode from DB: {}", is_mini);
                     if is_mini {
                         use tauri::LogicalSize;
+                        println!("📐 [STARTUP] Applying mini mode: 380x100, resizable=false");
                         let _ = window.set_min_size(Some(LogicalSize::new(380.0f64, 100.0f64)));
                         let _ = window.set_size(LogicalSize::new(380.0f64, 100.0f64));
                         let _ = window.set_resizable(false);
@@ -1091,6 +1127,7 @@ async fn main() {
             WindowEvent::CloseRequested { api, .. } => {
                 // Save window geometry before hiding
                 if let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) {
+                    println!("📐 [CLOSE] Saving geometry: pos=({}, {}), size={}x{}", pos.x, pos.y, size.width, size.height);
                     let db = window.app_handle().state::<AppState>().db.clone();
                     tauri::async_runtime::spawn(async move {
                         let _ = db.save_window_geometry(pos.x, pos.y, size.width, size.height).await;
@@ -1098,6 +1135,32 @@ async fn main() {
                 }
                 let _ = window.hide();
                 api.prevent_close();
+            }
+            WindowEvent::Moved(pos) => {
+                if let Ok(size) = window.outer_size() {
+                    println!("📐 [MOVED] pos=({}, {}), size={}x{}", pos.x, pos.y, size.width, size.height);
+                    let db = window.app_handle().state::<AppState>().db.clone();
+                    let px = pos.x;
+                    let py = pos.y;
+                    let sw = size.width;
+                    let sh = size.height;
+                    tauri::async_runtime::spawn(async move {
+                        let _ = db.save_window_geometry(px, py, sw, sh).await;
+                    });
+                }
+            }
+            WindowEvent::Resized(size) => {
+                if let Ok(pos) = window.outer_position() {
+                    println!("📐 [RESIZED] pos=({}, {}), size={}x{}", pos.x, pos.y, size.width, size.height);
+                    let db = window.app_handle().state::<AppState>().db.clone();
+                    let px = pos.x;
+                    let py = pos.y;
+                    let sw = size.width;
+                    let sh = size.height;
+                    tauri::async_runtime::spawn(async move {
+                        let _ = db.save_window_geometry(px, py, sw, sh).await;
+                    });
+                }
             }
             _ => {}
         })
