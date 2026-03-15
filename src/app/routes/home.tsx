@@ -216,9 +216,16 @@ export function HomePage() {
         }
     }, [audioState])
 
+    // Collapse expanded player only when entering shrink mode
     useEffect(() => {
-        setIsExpanded(false)
+        if (isShrinked) setIsExpanded(false)
     }, [isShrinked])
+
+    // Resize window when expanding/collapsing in shrink mode
+    useEffect(() => {
+        if (!isShrinked) return
+        invoke('resize_window', { height: isExpanded ? 280.0 : 100.0 })
+    }, [isExpanded])
 
     // Listen to media key events
     useEffect(() => {
@@ -463,10 +470,30 @@ export function HomePage() {
                 isShrinked={isShrinked}
                 onMusicModeToggle={() => setIsMusicMode(!isMusicMode)}
                 onIsShrinkedToggle={() => {
-                    setIsShrinked(!isShrinked)
-                    invoke('reset_window', { isShrinked: !isShrinked })
+                    const newShrinked = !isShrinked
+                    setIsShrinked(newShrinked)
+                    invoke('resize_window', {
+                        height: newShrinked ? 100.0 : 500.0
+                    })
+                }}
+                onResetWindow={() => {
+                    const height = isShrinked
+                        ? isExpanded
+                            ? 280.0
+                            : 100.0
+                        : 500.0
+                    invoke('reset_window', { height })
                 }}
             />
+
+            {/* Empty state in mini mode */}
+            {isShrinked && !currentTrack && (
+                <div className="flex items-center justify-center py-3">
+                    <p className="text-[12px] text-muted-foreground">
+                        Play something to see it here
+                    </p>
+                </div>
+            )}
 
             {/* Player - appears below header when track is loaded */}
             {currentTrack && (
@@ -476,17 +503,17 @@ export function HomePage() {
                             track={currentTrack}
                             isPlaying={isPlaying}
                             isLoading={audioState?.is_loading || false}
-                            onExpand={() => !isShrinked && setIsExpanded(true)}
+                            onExpand={() => setIsExpanded(true)}
                             onTogglePlayPause={handleTogglePlayPause}
                         />
                     ) : (
                         audioState && (
-                            <ExpandedPlayer
-                                audioState={audioState}
-                                onCollapse={() =>
-                                    !isShrinked && setIsExpanded(false)
-                                }
-                            />
+                            <div className={isShrinked ? 'pb-2' : ''}>
+                                <ExpandedPlayer
+                                    audioState={audioState}
+                                    onCollapse={() => setIsExpanded(false)}
+                                />
+                            </div>
                         )
                     )}
                 </>

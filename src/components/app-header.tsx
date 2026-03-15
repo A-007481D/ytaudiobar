@@ -1,6 +1,5 @@
 import { X, Music, Minus, Move, Shrink, Expand } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { invoke } from '@tauri-apps/api/core'
 
 interface AppHeaderProps {
     query: string
@@ -9,6 +8,7 @@ interface AppHeaderProps {
     isShrinked: boolean
     onMusicModeToggle: () => void
     onIsShrinkedToggle: () => void
+    onResetWindow: () => void
 }
 
 export function AppHeader({
@@ -17,7 +17,8 @@ export function AppHeader({
     isMusicMode,
     isShrinked,
     onMusicModeToggle,
-    onIsShrinkedToggle
+    onIsShrinkedToggle,
+    onResetWindow
 }: AppHeaderProps) {
     return (
         <div className="flex-shrink-0 bg-background">
@@ -48,18 +49,18 @@ export function AppHeader({
                         )}
                     </button>
                     <button
-                        onClick={() => invoke('reset_window', { isShrinked })}
+                        onClick={onResetWindow}
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                         title="Reset position & size"
                     >
-                        <Move className="w-3.5 h-3.5" />
+                        <Move className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => getCurrentWindow().minimize()}
                         className="w-6 h-6 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                         title="Minimize"
                     >
-                        <Minus className="w-3.5 h-3.5" />
+                        <Minus className="w-4 h-4" />
                     </button>
                 </div>
             </div>
