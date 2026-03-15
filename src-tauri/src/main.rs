@@ -92,6 +92,12 @@ async fn reinit_audio(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn show_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    show_and_focus_window(&window);
+    Ok(())
+}
+
+#[tauri::command]
 async fn resize_window(window: tauri::WebviewWindow, height: f64) -> Result<(), String> {
     use tauri::LogicalSize;
     let _ = window.set_size(LogicalSize::new(380.0f64, height));
@@ -989,7 +995,9 @@ async fn main() {
             // Get the main window
             let window = app.get_webview_window("main").unwrap();
 
-            // Show window first so the WM maps it (Linux ignores set_position on hidden windows)
+            // On Linux, show before geometry restore — WM ignores set_position on hidden windows.
+            // On Windows, the frontend calls show_main_window after applying UI state (no glitch).
+            #[cfg(target_os = "linux")]
             show_and_focus_window(&window);
 
             // Try to restore last saved geometry; fall back to default if none or off-screen
@@ -1114,6 +1122,7 @@ async fn main() {
             update_media_playback_state,
             clear_media_info,
             // Window commands
+            show_main_window,
             resize_window,
             reset_window,
             reinit_audio,

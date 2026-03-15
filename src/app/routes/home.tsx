@@ -83,7 +83,9 @@ export function HomePage() {
     // Search state (lifted from SearchTab to be accessible from Header)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMusicMode, setIsMusicMode] = useState(false)
-    const [isShrinked, setIsShrinked] = useState(false)
+    const [isShrinked, setIsShrinked] = useState(
+        () => localStorage.getItem('isShrinked') === 'true'
+    )
     const [wasResetWhileShrunk, setWasResetWhileShrunk] = useState(false)
     const [searchResults, setSearchResults] = useState<YTVideoInfo[]>([])
     const [isSearching, setIsSearching] = useState(false)
@@ -216,6 +218,20 @@ export function HomePage() {
             clearMediaInfo().catch(console.error)
         }
     }, [audioState])
+
+    // Persist shrink state and enforce correct window size on every change
+    useEffect(() => {
+        localStorage.setItem('isShrinked', String(isShrinked))
+    }, [isShrinked])
+
+    // On mount: apply correct size then show the window (prevents any startup glitch)
+    useEffect(() => {
+        const show = async () => {
+            if (isShrinked) await invoke('resize_window', { height: 100.0 })
+            await invoke('show_main_window')
+        }
+        show()
+    }, [])
 
     // Collapse expanded player only when entering shrink mode
     useEffect(() => {
