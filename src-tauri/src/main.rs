@@ -92,22 +92,44 @@ async fn reinit_audio(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn show_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
-    show_and_focus_window(&window);
-    Ok(())
+async fn set_mini_mode(is_mini: bool, state: State<'_, AppState>) -> Result<(), String> {
+    state.db.save_mini_mode(is_mini).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_mini_mode(state: State<'_, AppState>) -> Result<bool, String> {
+    state.db.load_mini_mode().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn resize_window(window: tauri::WebviewWindow, height: f64) -> Result<(), String> {
     use tauri::LogicalSize;
-    let _ = window.set_size(LogicalSize::new(380.0f64, height));
+    if height < 500.0 {
+        // Mini mode: remove min constraint first, then resize, then lock
+        let _ = window.set_min_size(Some(LogicalSize::new(380.0f64, height)));
+        let _ = window.set_size(LogicalSize::new(380.0f64, height));
+        let _ = window.set_resizable(false);
+    } else {
+        // Max mode: resize, restore constraints, unlock
+        let _ = window.set_resizable(true);
+        let _ = window.set_size(LogicalSize::new(380.0f64, height));
+        let _ = window.set_min_size(Some(LogicalSize::new(380.0f64, 500.0f64)));
+    }
     Ok(())
 }
 
 #[tauri::command]
 async fn reset_window(window: tauri::WebviewWindow, height: f64) -> Result<(), String> {
     use tauri::{PhysicalPosition, LogicalSize};
-    let _ = window.set_size(LogicalSize::new(380.0f64, height));
+    if height < 500.0 {
+        let _ = window.set_min_size(Some(LogicalSize::new(380.0f64, height)));
+        let _ = window.set_size(LogicalSize::new(380.0f64, height));
+        let _ = window.set_resizable(false);
+    } else {
+        let _ = window.set_resizable(true);
+        let _ = window.set_size(LogicalSize::new(380.0f64, height));
+        let _ = window.set_min_size(Some(LogicalSize::new(380.0f64, 500.0f64)));
+    }
     if let Ok(Some(monitor)) = window.current_monitor() {
         let screen = monitor.size();
         let scale = monitor.scale_factor();
@@ -869,14 +891,17 @@ async fn main() {
                 }
             });
 
-            // Check for updates silently in background (like macOS Sparkle)
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                use std::time::Duration;
-                tokio::time::sleep(Duration::from_secs(3)).await;
-                println!("🔍 Checking for updates in background...");
-                check_for_updates_silently(handle).await;
-            });
+            // Check for updates silently in background (disabled in dev mode)
+            #[cfg(not(debug_assertions))]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use std::time::Duration;
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    println!("🔍 Checking for updates in background...");
+                    check_for_updates_silently(handle).await;
+                });
+            }
 
             // Enable autostart on first run
             let handle = app.handle().clone();
@@ -995,9 +1020,7 @@ async fn main() {
             // Get the main window
             let window = app.get_webview_window("main").unwrap();
 
-            // On Linux, show before geometry restore — WM ignores set_position on hidden windows.
-            // On Windows, the frontend calls show_main_window after applying UI state (no glitch).
-            #[cfg(target_os = "linux")]
+            // Show window first so the WM maps it (Linux ignores set_position on hidden windows)
             show_and_focus_window(&window);
 
             // Try to restore last saved geometry; fall back to default if none or off-screen
@@ -1029,7 +1052,7 @@ async fn main() {
                 }
 
                 if !restored {
-                    // Default positioning
+                    // First launch or off-screen: use default 500px max mode positioning
                     if let Some(monitor) = window.current_monitor()? {
                         let screen_size = monitor.size();
                         if let Ok(window_size) = window.outer_size() {
@@ -1046,6 +1069,18 @@ async fn main() {
                                 let _ = window.set_position(PhysicalPosition::new(x, y));
                             }
                         }
+                    }
+                } else {
+                    // Geometry was restored — now apply mini mode if needed
+                    let db2 = app.state::<AppState>().db.clone();
+                    let is_mini = tokio::task::block_in_place(|| {
+                        tauri::async_runtime::block_on(db2.load_mini_mode())
+                    }).unwrap_or(false);
+                    if is_mini {
+                        use tauri::LogicalSize;
+                        let _ = window.set_min_size(Some(LogicalSize::new(380.0f64, 100.0f64)));
+                        let _ = window.set_size(LogicalSize::new(380.0f64, 100.0f64));
+                        let _ = window.set_resizable(false);
                     }
                 }
             }
@@ -1122,7 +1157,8 @@ async fn main() {
             update_media_playback_state,
             clear_media_info,
             // Window commands
-            show_main_window,
+            set_mini_mode,
+            get_mini_mode,
             resize_window,
             reset_window,
             reinit_audio,

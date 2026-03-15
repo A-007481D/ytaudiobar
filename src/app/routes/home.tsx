@@ -83,10 +83,7 @@ export function HomePage() {
     // Search state (lifted from SearchTab to be accessible from Header)
     const [searchQuery, setSearchQuery] = useState('')
     const [isMusicMode, setIsMusicMode] = useState(false)
-    const [isShrinked, setIsShrinked] = useState(
-        () => localStorage.getItem('isShrinked') === 'true'
-    )
-    const [wasResetWhileShrunk, setWasResetWhileShrunk] = useState(false)
+    const [isShrinked, setIsShrinked] = useState(false)
     const [searchResults, setSearchResults] = useState<YTVideoInfo[]>([])
     const [isSearching, setIsSearching] = useState(false)
     const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
@@ -219,18 +216,11 @@ export function HomePage() {
         }
     }, [audioState])
 
-    // Persist shrink state and enforce correct window size on every change
+    // Load mini mode from Rust DB on mount
     useEffect(() => {
-        localStorage.setItem('isShrinked', String(isShrinked))
-    }, [isShrinked])
-
-    // On mount: apply correct size then show the window (prevents any startup glitch)
-    useEffect(() => {
-        const show = async () => {
-            if (isShrinked) await invoke('resize_window', { height: 100.0 })
-            await invoke('show_main_window')
-        }
-        show()
+        invoke<boolean>('get_mini_mode').then((isMini) => {
+            if (isMini) setIsShrinked(true)
+        })
     }, [])
 
     // Collapse expanded player only when entering shrink mode
@@ -489,14 +479,10 @@ export function HomePage() {
                 onIsShrinkedToggle={() => {
                     const newShrinked = !isShrinked
                     setIsShrinked(newShrinked)
-                    if (!newShrinked && wasResetWhileShrunk) {
-                        setWasResetWhileShrunk(false)
-                        invoke('reset_window', { height: 500.0 })
-                    } else {
-                        invoke('resize_window', {
-                            height: newShrinked ? 100.0 : 500.0
-                        })
-                    }
+                    invoke('resize_window', {
+                        height: newShrinked ? 100.0 : 500.0
+                    })
+                    invoke('set_mini_mode', { isMini: newShrinked })
                 }}
                 onResetWindow={() => {
                     const height = isShrinked
@@ -505,7 +491,6 @@ export function HomePage() {
                             : 100.0
                         : 500.0
                     invoke('reset_window', { height })
-                    if (isShrinked) setWasResetWhileShrunk(true)
                 }}
             />
 

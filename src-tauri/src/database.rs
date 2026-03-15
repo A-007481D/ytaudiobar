@@ -100,6 +100,7 @@ impl DatabaseManager {
         let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_y INTEGER").execute(&self.pool).await;
         let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_width INTEGER").execute(&self.pool).await;
         let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN window_height INTEGER").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE app_settings ADD COLUMN is_mini_mode INTEGER DEFAULT 0").execute(&self.pool).await;
 
         // Create system "All Favorites" playlist if not exists
         self.create_system_playlist().await?;
@@ -356,5 +357,32 @@ impl DatabaseManager {
                 _ => None,
             }
         }))
+    }
+
+    pub async fn save_mini_mode(&self, is_mini: bool) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO app_settings (id, is_mini_mode)
+            VALUES ('default', ?)
+            ON CONFLICT(id) DO UPDATE SET is_mini_mode = excluded.is_mini_mode
+            "#
+        )
+        .bind(is_mini as i64)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn load_mini_mode(&self) -> Result<bool, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT is_mini_mode FROM app_settings WHERE id = 'default'"
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|r| {
+            let v: Option<i64> = r.get("is_mini_mode");
+            v
+        }).unwrap_or(0) != 0)
     }
 }
