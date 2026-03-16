@@ -7,11 +7,15 @@ import {
     Loader2,
     Music,
     Download,
-    Link
+    Link,
+    ListPlus,
+    ListEnd
 } from 'lucide-react'
 import {
     playTrack,
     togglePlayPause,
+    addToQueue,
+    addToQueueNext,
     downloadTrack,
     isTrackDownloaded,
     getActiveDownloads,
@@ -192,8 +196,35 @@ export function TrackItem({
         }
     }
 
-    // Removed: handleAddToQueue - tracks are no longer manually added to queue
-    // Queue is only populated by "Play All" playlist action
+    const handleAddToQueue = async (e?: React.MouseEvent) => {
+        e?.stopPropagation()
+        try {
+            await addToQueue(videoInfo)
+            setContextMenu(null)
+        } catch (error) {
+            console.error('Failed to add to queue:', error)
+        }
+    }
+
+    const handlePlayNext = async () => {
+        try {
+            await addToQueueNext(videoInfo)
+            setContextMenu(null)
+        } catch (error) {
+            console.error('Failed to add to queue next:', error)
+        }
+    }
+
+    const handleAddToQueueContext = async () => {
+        await handleAddToQueue()
+    }
+
+    const handleRemoveFromQueueContext = () => {
+        if (onRemove) {
+            onRemove()
+        }
+        setContextMenu(null)
+    }
 
     const handleToggleFavorite = async (e: React.MouseEvent) => {
         e.stopPropagation()
@@ -337,8 +368,6 @@ export function TrackItem({
                         )}
                     </button>
 
-                    {/* Note: "Add to Queue" button removed - queue is only populated via "Play All" in playlists */}
-
                     {/* Download Button - Only show if not already downloaded and finished checking */}
                     {context !== 'queue' &&
                         !isDownloaded &&
@@ -408,21 +437,6 @@ export function TrackItem({
                             )}
                         </button>
                     )}
-
-                    {/* Remove Button - Queue and Playlist context */}
-                    {(context === 'queue' || context === 'playlist') &&
-                        onRemove && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onRemove()
-                                }}
-                                className="w-6 h-6 flex items-center justify-center hover-macos-button rounded"
-                                title="Remove"
-                            >
-                                <Trash className="w-4 h-4 text-macos-red" />
-                            </button>
-                        )}
                 </div>
             </div>
 
@@ -433,13 +447,46 @@ export function TrackItem({
                     className="fixed z-50 bg-card border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
                     style={{ top: contextMenu.y, left: contextMenu.x }}
                 >
+                    {context !== 'queue' ? (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handlePlayNext}
+                                className="w-full justify-start text-[13px] px-3"
+                            >
+                                <ListEnd className="mr-2 h-4 w-4 text-muted-foreground" />
+                                Play Next
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleAddToQueueContext}
+                                className="w-full justify-start text-[13px] px-3"
+                            >
+                                <ListPlus className="mr-2 h-4 w-4 text-muted-foreground" />
+                                Add to Queue
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemoveFromQueueContext}
+                            className="w-full justify-start text-[13px] px-3"
+                        >
+                            <Trash className="mr-2 h-4 w-4 text-muted-foreground group-hover:text-red-500" />
+                            Remove from Queue
+                        </Button>
+                    )}
+                    <div className="h-[1px] bg-border my-1" />
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleCopyLink}
                         className="w-full justify-start text-[13px] px-3"
                     >
-                        <Link className="text-muted-foreground" />
+                        <Link className="mr-2 h-4 w-4 text-muted-foreground" />
                         Copy link
                     </Button>
                 </div>

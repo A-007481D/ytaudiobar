@@ -1,6 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Shuffle, Repeat, Repeat1, ListMusic, GripVertical } from 'lucide-react'
-import { getQueue, toggleShuffle, cycleRepeatMode, reorderQueue, type YTVideoInfo, type RepeatMode } from '@/lib/tauri'
+import {
+    getQueue,
+    toggleShuffle,
+    cycleRepeatMode,
+    reorderQueue,
+    removeFromQueue,
+    getShuffleMode,
+    getRepeatMode,
+    type YTVideoInfo,
+    type RepeatMode
+} from '@/lib/tauri'
 import { TrackItem } from '@/components/track-item'
 import { TabHeader } from '@/components/tab-header'
 
@@ -11,24 +21,55 @@ export function QueueTab() {
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const isMountedRef = useRef(true)
+    const latestLoadRequestRef = useRef(0)
 
     const loadQueue = async () => {
+        const requestId = ++latestLoadRequestRef.current
+
         try {
-            const queueData = await getQueue()
+            const [queueData, shuffle, repeat] = await Promise.all([
+                getQueue(),
+                getShuffleMode(),
+                getRepeatMode()
+            ])
+
+            // Ignore stale responses from older polling requests.
+            if (
+                !isMountedRef.current ||
+                requestId !== latestLoadRequestRef.current
+            ) {
+                return
+            }
+
             setQueue(queueData)
+            setShuffleMode(shuffle)
+            setRepeatMode(repeat)
         } catch (error) {
             console.error('Failed to load queue:', error)
         } finally {
-            setIsLoading(false)
+            if (
+                isMountedRef.current &&
+                requestId === latestLoadRequestRef.current
+            ) {
+                setIsLoading(false)
+            }
         }
     }
 
     useEffect(() => {
-        loadQueue()
+        isMountedRef.current = true
+        void loadQueue()
 
-        // Set up interval to refresh queue
-        const interval = setInterval(loadQueue, 2000)
-        return () => clearInterval(interval)
+        // Poll queue/modes because multiple views can mutate queue state.
+        const interval = setInterval(() => {
+            void loadQueue()
+        }, 2000)
+
+        return () => {
+            isMountedRef.current = false
+            clearInterval(interval)
+        }
     }, [])
 
     const handleToggleShuffle = async () => {
@@ -50,8 +91,19 @@ export function QueueTab() {
         }
     }
 
+    const handleRemoveFromQueue = async (index: number) => {
+        try {
+            await removeFromQueue(index)
+            await loadQueue()
+        } catch (error) {
+            console.error('Failed to remove from queue:', error)
+        }
+    }
+
     // Drag and drop handlers
-    const handleDragStart = (index: number) => {
+    const handleDragStart = (event: React.DragEvent, index: number) => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', String(index))
         setDraggedIndex(index)
     }
 
@@ -79,6 +131,11 @@ export function QueueTab() {
 
         const newQueue = [...queue]
         const draggedItem = newQueue[draggedIndex]
+        if (!draggedItem) {
+            setDraggedIndex(null)
+            setDragOverIndex(null)
+            return
+        }
 
         // Remove from old position
         newQueue.splice(draggedIndex, 1)
@@ -93,7 +150,7 @@ export function QueueTab() {
         // Update queue order in backend
         reorderQueue(newQueue).catch((error) => {
             console.error('Failed to reorder queue:', error)
-            loadQueue()
+            void loadQueue()
         })
     }
 
@@ -147,25 +204,29 @@ export function QueueTab() {
                             Queue is Empty
                         </h3>
                         <p className="text-[13px] text-muted-foreground max-w-[250px]">
-                            Use "Play All" on a playlist to add tracks to your queue
+                            Use Play All on a playlist to add tracks to your
+                            queue
                         </p>
                     </div>
                 ) : (
                     <div className="py-2">
                         {queue.map((track, index) => (
                             <div
-                                key={`${track.id}-${index}`}
+                                key={track.id}
                                 draggable
-                                onDragStart={() => handleDragStart(index)}
+                                onDragStart={(e) => handleDragStart(e, index)}
                                 onDragEnter={(e) => handleDragEnter(e, index)}
                                 onDragOver={handleDragOver}
                                 onDragLeave={handleDragLeave}
                                 onDrop={(e) => handleDrop(e, index)}
                                 onDragEnd={handleDragEnd}
                                 className={`group flex items-center gap-1 transition-all duration-200 ${
-                                    draggedIndex === index ? 'opacity-30 scale-95' : 'opacity-100'
+                                    draggedIndex === index
+                                        ? 'opacity-30 scale-95'
+                                        : 'opacity-100'
                                 } ${
-                                    dragOverIndex === index && draggedIndex !== index
+                                    dragOverIndex === index &&
+                                    draggedIndex !== index
                                         ? 'border-t-2 border-[var(--macos-blue)] pt-2'
                                         : ''
                                 }`}
@@ -180,6 +241,9 @@ export function QueueTab() {
                                         track={track}
                                         context="queue"
                                         queueIndex={index}
+                                        onRemove={() =>
+                                            handleRemoveFromQueue(index)
+                                        }
                                     />
                                 </div>
                             </div>

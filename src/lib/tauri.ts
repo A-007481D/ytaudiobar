@@ -111,13 +111,19 @@ export const getAudioState = () => invoke<AudioState>('get_audio_state')
 // Queue
 export const addToQueue = (track: YTVideoInfo) =>
     invoke<void>('add_to_queue', { track })
+export const addToQueueNext = (track: YTVideoInfo) =>
+    invoke<void>('add_to_queue_next', { track })
 export const getQueue = () => invoke<YTVideoInfo[]>('get_queue')
 export const clearQueue = () => invoke<void>('clear_queue')
 export const toggleShuffle = () => invoke<boolean>('toggle_shuffle')
+export const getShuffleMode = () => invoke<boolean>('get_shuffle_mode')
 export const cycleRepeatMode = () => invoke<RepeatMode>('cycle_repeat_mode')
+export const getRepeatMode = () => invoke<RepeatMode>('get_repeat_mode')
 export const getQueueInfo = () => invoke<string>('get_queue_info')
 export const reorderQueue = (newQueue: YTVideoInfo[]) =>
     invoke<void>('reorder_queue', { newQueue })
+export const removeFromQueue = (index: number) =>
+    invoke<void>('remove_from_queue', { index })
 
 // Playlists
 export const getAllPlaylists = () => invoke<Playlist[]>('get_all_playlists')

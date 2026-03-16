@@ -1,5 +1,6 @@
 use crate::models::{QueueState, RepeatMode, YTVideoInfo};
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -16,6 +17,13 @@ impl QueueManager {
 
     pub async fn add_to_queue(&self, track: YTVideoInfo) {
         let mut state = self.state.lock().await;
+
+        // Prevent duplicates
+        if state.queue.iter().any(|t| t.id == track.id) {
+            println!("⚠️ Track already in queue: {}", track.title);
+            return;
+        }
+
         state.queue.push(track);
         println!("➕ Added to queue. Total tracks: {}", state.queue.len());
     }
@@ -28,6 +36,13 @@ impl QueueManager {
 
     pub async fn insert_next(&self, track: YTVideoInfo) {
         let mut state = self.state.lock().await;
+
+        // Prevent duplicates
+        if state.queue.iter().any(|t| t.id == track.id) {
+            println!("⚠️ Track already in queue: {}", track.title);
+            return;
+        }
+
         let insert_index = (state.current_index + 1).max(0) as usize;
 
         if insert_index >= state.queue.len() {
@@ -46,12 +61,23 @@ impl QueueManager {
             return Err("Invalid queue index".to_string());
         }
 
+        // If removing the currently playing track
+        if state.current_index == index as i32 {
+            // Just move to the next track effectively by keeping the index same (shifting subsequent items left)
+            // But if it was the last track, decreasing index is needed
+             if index == state.queue.len() - 1 {
+                 state.current_index -= 1;
+             }
+             // If it wasn't the last track, the next track slides into the current index, so `current_index` remains valid
+        }
+        // If removing a track BEFORE the current track
+        else if (index as i32) < state.current_index {
+             state.current_index -= 1;
+        }
+        // If removing a track AFTER the current track, current_index is unaffected
+
         state.queue.remove(index);
 
-        // Adjust current index if needed
-        if state.current_index >= index as i32 && state.current_index > 0 {
-            state.current_index -= 1;
-        }
 
         println!("🗑️ Removed track from queue. Remaining: {}", state.queue.len());
         Ok(())
@@ -226,6 +252,16 @@ impl QueueManager {
         state.repeat_mode
     }
 
+    pub async fn get_shuffle_mode(&self) -> bool {
+        let state = self.state.lock().await;
+        state.shuffle_mode
+    }
+
+    pub async fn get_repeat_mode(&self) -> RepeatMode {
+        let state = self.state.lock().await;
+        state.repeat_mode
+    }
+
     pub async fn get_queue(&self) -> Vec<YTVideoInfo> {
         let state = self.state.lock().await;
         state.queue.clone()
@@ -264,6 +300,21 @@ impl QueueManager {
 
         if new_queue.len() != state.queue.len() {
             return Err("New queue length doesn't match current queue".to_string());
+        }
+
+        // Ensure reorder request contains exactly the same track multiset.
+        let mut current_counts: HashMap<&str, usize> = HashMap::new();
+        for track in &state.queue {
+            *current_counts.entry(track.id.as_str()).or_insert(0) += 1;
+        }
+
+        let mut new_counts: HashMap<&str, usize> = HashMap::new();
+        for track in &new_queue {
+            *new_counts.entry(track.id.as_str()).or_insert(0) += 1;
+        }
+
+        if current_counts != new_counts {
+            return Err("New queue items do not match current queue".to_string());
         }
 
         // Find current track to preserve playback position
