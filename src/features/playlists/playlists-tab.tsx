@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { confirm } from '@tauri-apps/plugin-dialog'
 import {
     Plus,
     Heart,
@@ -117,8 +118,14 @@ export function PlaylistsTab() {
     const handleDeletePlaylist = async () => {
         if (!selectedPlaylist || selectedPlaylist.is_system_playlist) return
 
-        const confirmed = window.confirm(
-            `Delete playlist "${selectedPlaylist.name}"?`
+        const confirmed = await confirm(
+            `Delete playlist "${selectedPlaylist.name}"?`,
+            {
+                title: 'Delete Playlist',
+                kind: 'warning',
+                okLabel: 'Delete',
+                cancelLabel: 'Cancel'
+            }
         )
         if (!confirmed) return
 
