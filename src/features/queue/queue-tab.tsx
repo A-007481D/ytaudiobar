@@ -34,7 +34,6 @@ export function QueueTab() {
                 getRepeatMode()
             ])
 
-            // Ignore stale responses from older polling requests.
             if (
                 !isMountedRef.current ||
                 requestId !== latestLoadRequestRef.current
@@ -61,7 +60,6 @@ export function QueueTab() {
         isMountedRef.current = true
         void loadQueue()
 
-        // Poll queue/modes because multiple views can mutate queue state.
         const interval = setInterval(() => {
             void loadQueue()
         }, 2000)
@@ -100,7 +98,6 @@ export function QueueTab() {
         }
     }
 
-    // Drag and drop handlers
     const handleDragStart = (event: React.DragEvent, index: number) => {
         event.dataTransfer.effectAllowed = 'move'
         event.dataTransfer.setData('text/plain', String(index))
@@ -137,17 +134,13 @@ export function QueueTab() {
             return
         }
 
-        // Remove from old position
         newQueue.splice(draggedIndex, 1)
-
-        // Insert at new position
         newQueue.splice(dropIndex, 0, draggedItem)
 
         setQueue(newQueue)
         setDraggedIndex(null)
         setDragOverIndex(null)
 
-        // Update queue order in backend
         reorderQueue(newQueue).catch((error) => {
             console.error('Failed to reorder queue:', error)
             void loadQueue()
@@ -195,7 +188,6 @@ export function QueueTab() {
                 }
             />
 
-            {/* Queue Content */}
             <div className="flex-1 overflow-y-auto">
                 {isLoading ? null : queue.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -231,7 +223,6 @@ export function QueueTab() {
                                         : ''
                                 }`}
                             >
-                                {/* Drag Handle */}
                                 <div className="pl-1 cursor-grab active:cursor-grabbing">
                                     <GripVertical className="w-4 h-4 text-muted-foreground" />
                                 </div>
