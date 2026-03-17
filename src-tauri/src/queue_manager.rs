@@ -1,5 +1,6 @@
 use crate::models::{QueueState, RepeatMode, YTVideoInfo};
 use rand::seq::SliceRandom;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -16,6 +17,12 @@ impl QueueManager {
 
     pub async fn add_to_queue(&self, track: YTVideoInfo) {
         let mut state = self.state.lock().await;
+
+        if state.queue.iter().any(|t| t.id == track.id) {
+            println!("⚠️ Track already in queue: {}", track.title);
+            return;
+        }
+
         state.queue.push(track);
         println!("➕ Added to queue. Total tracks: {}", state.queue.len());
     }
@@ -28,6 +35,12 @@ impl QueueManager {
 
     pub async fn insert_next(&self, track: YTVideoInfo) {
         let mut state = self.state.lock().await;
+
+        if state.queue.iter().any(|t| t.id == track.id) {
+            println!("⚠️ Track already in queue: {}", track.title);
+            return;
+        }
+
         let insert_index = (state.current_index + 1).max(0) as usize;
 
         if insert_index >= state.queue.len() {
@@ -46,12 +59,17 @@ impl QueueManager {
             return Err("Invalid queue index".to_string());
         }
 
+        if state.current_index == index as i32 {
+             if index == state.queue.len() - 1 {
+                 state.current_index -= 1;
+             }
+        }
+        else if (index as i32) < state.current_index {
+             state.current_index -= 1;
+        }
+
         state.queue.remove(index);
 
-        // Adjust current index if needed
-        if state.current_index >= index as i32 && state.current_index > 0 {
-            state.current_index -= 1;
-        }
 
         println!("🗑️ Removed track from queue. Remaining: {}", state.queue.len());
         Ok(())
@@ -84,7 +102,6 @@ impl QueueManager {
 
         match state.repeat_mode {
             RepeatMode::One => {
-                // Repeat current track
                 if state.current_index >= 0 && (state.current_index as usize) < state.queue.len() {
                     state.queue.get(state.current_index as usize).cloned()
                 } else {
@@ -92,12 +109,10 @@ impl QueueManager {
                 }
             }
             RepeatMode::All => {
-                // Move to next track, loop back to start
                 state.current_index = (state.current_index + 1) % state.queue.len() as i32;
                 state.queue.get(state.current_index as usize).cloned()
             }
             RepeatMode::Off => {
-                // Move to next track, stop at end
                 let next_index = state.current_index + 1;
                 if (next_index as usize) < state.queue.len() {
                     state.current_index = next_index;
@@ -118,7 +133,6 @@ impl QueueManager {
 
         match state.repeat_mode {
             RepeatMode::One => {
-                // Repeat current track
                 if state.current_index >= 0 && (state.current_index as usize) < state.queue.len() {
                     state.queue.get(state.current_index as usize).cloned()
                 } else {
@@ -126,7 +140,6 @@ impl QueueManager {
                 }
             }
             RepeatMode::All => {
-                // Move to previous track, loop back to end
                 state.current_index = if state.current_index <= 0 {
                     state.queue.len() as i32 - 1
                 } else {
@@ -135,7 +148,6 @@ impl QueueManager {
                 state.queue.get(state.current_index as usize).cloned()
             }
             RepeatMode::Off => {
-                // Move to previous track, stop at beginning
                 if state.current_index > 0 {
                     state.current_index -= 1;
                     state.queue.get(state.current_index as usize).cloned()
@@ -170,21 +182,17 @@ impl QueueManager {
         state.shuffle_mode = !state.shuffle_mode;
 
         if state.shuffle_mode {
-            // Save original order
             state.original_queue = state.queue.clone();
 
-            // Get current track before shuffle
             let current_track = if state.current_index >= 0 && (state.current_index as usize) < state.queue.len() {
                 Some(state.queue[state.current_index as usize].clone())
             } else {
                 None
             };
 
-            // Shuffle the queue
             let mut rng = rand::thread_rng();
             state.queue.shuffle(&mut rng);
 
-            // Move current track to the front if it exists
             if let Some(track) = current_track {
                 if let Some(pos) = state.queue.iter().position(|t| t.id == track.id) {
                     state.queue.swap(0, pos);
@@ -194,7 +202,6 @@ impl QueueManager {
 
             println!("🔀 Shuffle enabled");
         } else {
-            // Restore original order
             if !state.original_queue.is_empty() {
                 let current_track = if state.current_index >= 0 && (state.current_index as usize) < state.queue.len() {
                     Some(state.queue[state.current_index as usize].clone())
@@ -204,7 +211,6 @@ impl QueueManager {
 
                 state.queue = state.original_queue.clone();
 
-                // Find current track in original order
                 if let Some(track) = current_track {
                     if let Some(pos) = state.queue.iter().position(|t| t.id == track.id) {
                         state.current_index = pos as i32;
@@ -223,6 +229,16 @@ impl QueueManager {
         state.repeat_mode = state.repeat_mode.cycle();
 
         println!("🔁 Repeat mode: {}", state.repeat_mode.as_str());
+        state.repeat_mode
+    }
+
+    pub async fn get_shuffle_mode(&self) -> bool {
+        let state = self.state.lock().await;
+        state.shuffle_mode
+    }
+
+    pub async fn get_repeat_mode(&self) -> RepeatMode {
+        let state = self.state.lock().await;
         state.repeat_mode
     }
 
@@ -266,17 +282,28 @@ impl QueueManager {
             return Err("New queue length doesn't match current queue".to_string());
         }
 
-        // Find current track to preserve playback position
+        let mut current_counts: HashMap<&str, usize> = HashMap::new();
+        for track in &state.queue {
+            *current_counts.entry(track.id.as_str()).or_insert(0) += 1;
+        }
+
+        let mut new_counts: HashMap<&str, usize> = HashMap::new();
+        for track in &new_queue {
+            *new_counts.entry(track.id.as_str()).or_insert(0) += 1;
+        }
+
+        if current_counts != new_counts {
+            return Err("New queue items do not match current queue".to_string());
+        }
+
         let current_track = if state.current_index >= 0 && (state.current_index as usize) < state.queue.len() {
             Some(state.queue[state.current_index as usize].clone())
         } else {
             None
         };
 
-        // Update queue with new order
         state.queue = new_queue;
 
-        // Find new index of current track
         if let Some(track) = current_track {
             if let Some(pos) = state.queue.iter().position(|t| t.id == track.id) {
                 state.current_index = pos as i32;

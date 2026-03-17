@@ -7,11 +7,15 @@ import {
     Loader2,
     Music,
     Download,
-    Link
+    Link,
+    ListPlus,
+    ListEnd
 } from 'lucide-react'
 import {
     playTrack,
     togglePlayPause,
+    addToQueue,
+    addToQueueNext,
     downloadTrack,
     isTrackDownloaded,
     getActiveDownloads,
@@ -61,7 +65,6 @@ export function TrackItem({
     } | null>(null)
     const contextMenuRef = useRef<HTMLDivElement>(null)
 
-    // Convert Track to YTVideoInfo format
     const videoInfo: YTVideoInfo =
         'uploader' in track
             ? track
@@ -72,7 +75,6 @@ export function TrackItem({
                   description: null
               }
 
-    // Use Zustand store for player state
     const {
         loadingTrackId,
         currentTrack,
@@ -83,15 +85,12 @@ export function TrackItem({
     const isThisTrackPlaying =
         currentTrack?.id === videoInfo.id && globalIsPlaying
 
-    // Check if track is downloaded or downloading on mount
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                // Check if downloaded
                 const downloaded = await isTrackDownloaded(videoInfo.id)
                 setIsDownloaded(downloaded)
 
-                // Check if currently downloading
                 if (!downloaded) {
                     const activeDownloads = await getActiveDownloads()
                     const thisDownload = activeDownloads.find(
@@ -110,7 +109,6 @@ export function TrackItem({
         }
         checkStatus()
 
-        // Periodically check download status (but don't set isCheckingDownload after first check)
         const interval = setInterval(async () => {
             try {
                 const downloaded = await isTrackDownloaded(videoInfo.id)
@@ -132,7 +130,6 @@ export function TrackItem({
         return () => clearInterval(interval)
     }, [videoInfo.id])
 
-    // Poll for download progress when downloading
     useEffect(() => {
         if (!isDownloading) return
 
@@ -144,13 +141,11 @@ export function TrackItem({
                 )
                 if (thisDownload) {
                     setDownloadProgress(thisDownload.progress)
-                    // If download completed, update state
                     if (thisDownload.is_completed) {
                         setIsDownloading(false)
                         setIsDownloaded(true)
                     }
                 } else {
-                    // Download not found in active downloads, check if completed
                     const downloaded = await isTrackDownloaded(videoInfo.id)
                     if (downloaded) {
                         setIsDownloading(false)
@@ -163,44 +158,61 @@ export function TrackItem({
         }
 
         checkProgress()
-        const interval = setInterval(checkProgress, 500) // Check every 500ms for smooth progress
+        const interval = setInterval(checkProgress, 500)
         return () => clearInterval(interval)
     }, [isDownloading, videoInfo.id])
 
     const handlePlay = async () => {
-        // Don't allow clicking play if track is currently loading
         if (isThisTrackLoading) return
 
         try {
-            // If this is the current track (playing or paused), toggle play/pause
-            // Otherwise, play the new track
             if (currentTrack?.id === videoInfo.id) {
                 await togglePlayPause()
             } else {
-                // Set loading state IMMEDIATELY for instant UI feedback
                 setLoadingTrack(videoInfo.id)
-
-                // Play track directly WITHOUT adding to queue
-                // Queue is only populated via "Play All" on playlists
-                // Backend will handle fetching details if duration is 0
                 await playTrack(videoInfo)
             }
         } catch (error) {
             console.error('Failed to play track:', error)
-            // Clear loading state on error
             setLoadingTrack(null)
         }
     }
 
-    // Removed: handleAddToQueue - tracks are no longer manually added to queue
-    // Queue is only populated by "Play All" playlist action
+    const handleAddToQueue = async (e?: React.MouseEvent) => {
+        e?.stopPropagation()
+        try {
+            await addToQueue(videoInfo)
+            setContextMenu(null)
+        } catch (error) {
+            console.error('Failed to add to queue:', error)
+        }
+    }
+
+    const handlePlayNext = async () => {
+        try {
+            await addToQueueNext(videoInfo)
+            setContextMenu(null)
+        } catch (error) {
+            console.error('Failed to add to queue next:', error)
+        }
+    }
+
+    const handleAddToQueueContext = async () => {
+        await handleAddToQueue()
+    }
+
+    const handleRemoveFromQueueContext = () => {
+        if (onRemove) {
+            onRemove()
+        }
+        setContextMenu(null)
+    }
 
     const handleToggleFavorite = async (e: React.MouseEvent) => {
         e.stopPropagation()
         if (onToggleFavorite) {
             onToggleFavorite()
         } else {
-            // Load playlists first, then show modal
             try {
                 const playlists = await loadPlaylistsWithTrackData(videoInfo.id)
                 setLoadedPlaylists(playlists)
@@ -218,7 +230,6 @@ export function TrackItem({
         setIsDownloading(true)
         try {
             await downloadTrack(videoInfo)
-            // Don't set isDownloading to false here - let the progress polling handle it
         } catch (error) {
             console.error('Failed to download track:', error)
             setIsDownloading(false)
@@ -260,7 +271,6 @@ export function TrackItem({
                 onClick={handlePlay}
                 onContextMenu={handleContextMenu}
             >
-                {/* Leading Element - Queue Number */}
                 {context === 'queue' && queueIndex !== undefined && (
                     <div className="w-6 flex-shrink-0 text-center">
                         <span className="text-[12px] text-muted-foreground">
@@ -269,7 +279,6 @@ export function TrackItem({
                     </div>
                 )}
 
-                {/* Thumbnail - 48x48px with 4px radius */}
                 <div className="w-12 h-12 rounded flex-shrink-0 bg-secondary overflow-hidden">
                     {videoInfo.thumbnail_url ? (
                         <img
@@ -284,7 +293,6 @@ export function TrackItem({
                     )}
                 </div>
 
-                {/* Track Info */}
                 <div className="flex-1 min-w-0 overflow-hidden">
                     <div
                         className={`text-[15px] font-semibold truncate ${
@@ -310,9 +318,7 @@ export function TrackItem({
                     </div>
                 </div>
 
-                {/* Action Buttons - Always visible, 16px icons */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Play/Pause Button */}
                     <button
                         onClick={(e) => {
                             e.stopPropagation()
@@ -337,9 +343,6 @@ export function TrackItem({
                         )}
                     </button>
 
-                    {/* Note: "Add to Queue" button removed - queue is only populated via "Play All" in playlists */}
-
-                    {/* Download Button - Only show if not already downloaded and finished checking */}
                     {context !== 'queue' &&
                         !isDownloaded &&
                         !isCheckingDownload && (
@@ -355,7 +358,6 @@ export function TrackItem({
                             >
                                 {isDownloading ? (
                                     <div className="relative w-6 h-6 flex items-center justify-center">
-                                        {/* Background circle */}
                                         <svg className="absolute w-6 h-6 -rotate-90">
                                             <circle
                                                 cx="12"
@@ -379,7 +381,6 @@ export function TrackItem({
                                                 strokeLinecap="round"
                                             />
                                         </svg>
-                                        {/* Percentage text */}
                                         <span className="text-[8px] font-bold text-[var(--macos-blue)]">
                                             {Math.round(downloadProgress * 100)}
                                         </span>
@@ -390,7 +391,6 @@ export function TrackItem({
                             </button>
                         )}
 
-                    {/* Favorite Toggle - All contexts except playlist */}
                     {context !== 'playlist' && (
                         <button
                             onClick={handleToggleFavorite}
@@ -408,44 +408,60 @@ export function TrackItem({
                             )}
                         </button>
                     )}
-
-                    {/* Remove Button - Queue and Playlist context */}
-                    {(context === 'queue' || context === 'playlist') &&
-                        onRemove && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    onRemove()
-                                }}
-                                className="w-6 h-6 flex items-center justify-center hover-macos-button rounded"
-                                title="Remove"
-                            >
-                                <Trash className="w-4 h-4 text-macos-red" />
-                            </button>
-                        )}
                 </div>
             </div>
 
-            {/* Context Menu */}
             {contextMenu && (
                 <div
                     ref={contextMenuRef}
                     className="fixed z-50 bg-card border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px]"
                     style={{ top: contextMenu.y, left: contextMenu.x }}
                 >
+                    {context !== 'queue' ? (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handlePlayNext}
+                                className="w-full justify-start text-[13px] px-3"
+                            >
+                                <ListEnd className="mr-2 h-4 w-4 text-muted-foreground" />
+                                Play Next
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleAddToQueueContext}
+                                className="w-full justify-start text-[13px] px-3"
+                            >
+                                <ListPlus className="mr-2 h-4 w-4 text-muted-foreground" />
+                                Add to Queue
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemoveFromQueueContext}
+                            className="w-full justify-start text-[13px] px-3"
+                        >
+                            <Trash className="mr-2 h-4 w-4 text-muted-foreground group-hover:text-red-500" />
+                            Remove from Queue
+                        </Button>
+                    )}
+                    <div className="h-[1px] bg-border my-1" />
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleCopyLink}
                         className="w-full justify-start text-[13px] px-3"
                     >
-                        <Link className="text-muted-foreground" />
+                        <Link className="mr-2 h-4 w-4 text-muted-foreground" />
                         Copy link
                     </Button>
                 </div>
             )}
 
-            {/* Playlist Selection Modal */}
             {showPlaylistModal && loadedPlaylists && (
                 <PlaylistSelectionModal
                     track={videoInfo}
@@ -453,9 +469,7 @@ export function TrackItem({
                     onClose={() => {
                         setShowPlaylistModal(false)
                         setLoadedPlaylists(null)
-                        // Trigger a re-check of favorites after modal closes
                         if (onToggleFavorite) {
-                            // Parent component should handle refreshing favorites
                             window.dispatchEvent(
                                 new CustomEvent('favorites-updated')
                             )

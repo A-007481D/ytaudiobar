@@ -304,6 +304,12 @@ async fn add_to_queue(track: YTVideoInfo, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
+async fn add_to_queue_next(track: YTVideoInfo, state: State<'_, AppState>) -> Result<(), String> {
+    state.queue.insert_next(track).await;
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_queue(state: State<'_, AppState>) -> Result<Vec<YTVideoInfo>, String> {
     Ok(state.queue.get_queue().await)
 }
@@ -320,8 +326,18 @@ async fn toggle_shuffle(state: State<'_, AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
+async fn get_shuffle_mode(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.queue.get_shuffle_mode().await)
+}
+
+#[tauri::command]
 async fn cycle_repeat_mode(state: State<'_, AppState>) -> Result<RepeatMode, String> {
     Ok(state.queue.cycle_repeat_mode().await)
+}
+
+#[tauri::command]
+async fn get_repeat_mode(state: State<'_, AppState>) -> Result<RepeatMode, String> {
+    Ok(state.queue.get_repeat_mode().await)
 }
 
 #[tauri::command]
@@ -332,6 +348,11 @@ async fn get_queue_info(state: State<'_, AppState>) -> Result<String, String> {
 #[tauri::command]
 async fn reorder_queue(new_queue: Vec<YTVideoInfo>, state: State<'_, AppState>) -> Result<(), String> {
     state.queue.reorder_queue(new_queue).await
+}
+
+#[tauri::command]
+async fn remove_from_queue(index: usize, state: State<'_, AppState>) -> Result<(), String> {
+    state.queue.remove_from_queue(index).await
 }
 
 // ===== PLAYLIST COMMANDS =====
@@ -1185,12 +1206,16 @@ async fn main() {
             play_previous,
             get_audio_state,
             add_to_queue,
+            add_to_queue_next,
             get_queue,
             clear_queue,
             toggle_shuffle,
+            get_shuffle_mode,
             cycle_repeat_mode,
+            get_repeat_mode,
             get_queue_info,
             reorder_queue,
+            remove_from_queue,
             // Playlist commands
             get_all_playlists,
             create_playlist,
