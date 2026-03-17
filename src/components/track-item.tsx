@@ -197,10 +197,6 @@ export function TrackItem({
         }
     }
 
-    const handleAddToQueueContext = async () => {
-        await handleAddToQueue()
-    }
-
     const handleRemoveFromQueueContext = () => {
         if (onRemove) {
             onRemove()
@@ -391,6 +387,19 @@ export function TrackItem({
                             </button>
                         )}
 
+                    {context === 'playlist' && onRemove && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onRemove()
+                            }}
+                            className="w-6 h-6 flex items-center justify-center hover-macos-button rounded"
+                            title="Remove"
+                        >
+                            <Trash className="w-4 h-4 text-macos-red" />
+                        </button>
+                    )}
+
                     {context !== 'playlist' && (
                         <button
                             onClick={handleToggleFavorite}
@@ -431,7 +440,7 @@ export function TrackItem({
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={handleAddToQueueContext}
+                                onClick={() => handleAddToQueue()}
                                 className="w-full justify-start text-[13px] px-3"
                             >
                                 <ListPlus className="mr-2 h-4 w-4 text-muted-foreground" />
