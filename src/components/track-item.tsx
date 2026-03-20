@@ -36,7 +36,6 @@ interface TrackItemProps {
     context: 'search' | 'queue' | 'playlist'
     isCurrentTrack?: boolean
     isPlaying?: boolean
-    queueIndex?: number
     isFavorite?: boolean
     onRemove?: () => void
     onToggleFavorite?: () => void
@@ -46,7 +45,6 @@ export function TrackItem({
     track,
     context,
     isCurrentTrack,
-    queueIndex,
     isFavorite,
     onRemove,
     onToggleFavorite
