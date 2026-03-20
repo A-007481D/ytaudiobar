@@ -13,18 +13,116 @@ import {
 } from '@/lib/tauri'
 import { TrackItem } from '@/components/track-item'
 import { TabHeader } from '@/components/tab-header'
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay,
+    type DragStartEvent,
+    type DragEndEvent
+} from '@dnd-kit/core'
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable,
+    arrayMove
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
+function SortableTrackRow({
+    track,
+    index,
+    onRemove
+}: {
+    track: YTVideoInfo
+    index: number
+    onRemove: () => void
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: track.id })
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        zIndex: isDragging ? 0 : ('auto' as const)
+    }
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="group flex items-center hover-macos-button rounded transition-colors touch-none"
+            {...attributes}
+            {...listeners}
+        >
+            <div className="w-5 flex-shrink-0 flex items-center justify-center self-stretch">
+                <span className="text-[11px] text-muted-foreground">
+                    {index + 1}
+                </span>
+            </div>
+            <div className="flex-shrink-0 flex items-center justify-center self-stretch px-0.5 cursor-grab active:cursor-grabbing">
+                <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
+
+            <div className="flex-1 min-w-0 overflow-hidden">
+                <TrackItem track={track} context="queue" onRemove={onRemove} />
+            </div>
+        </div>
+    )
+}
+
+function DragOverlayRow({
+    track,
+    index
+}: {
+    track: YTVideoInfo
+    index: number
+}) {
+    return (
+        <div className="flex items-center bg-card/95 rounded-lg shadow-lg border border-white/10 backdrop-blur-sm">
+            <div className="w-5 flex-shrink-0 text-center">
+                <span className="text-[11px] text-muted-foreground">
+                    {index + 1}
+                </span>
+            </div>
+            <div className="flex-shrink-0 px-0.5 cursor-grabbing">
+                <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0 overflow-hidden">
+                <TrackItem track={track} context="queue" />
+            </div>
+        </div>
+    )
+}
 
 export function QueueTab() {
     const [queue, setQueue] = useState<YTVideoInfo[]>([])
     const [shuffleMode, setShuffleMode] = useState(false)
     const [repeatMode, setRepeatMode] = useState<RepeatMode>('Off')
-    const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+    const [activeId, setActiveId] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const isMountedRef = useRef(true)
     const latestLoadRequestRef = useRef(0)
+    const isDraggingRef = useRef(false)
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: { distance: 5 }
+        })
+    )
 
     const loadQueue = async () => {
+        if (isDraggingRef.current) return
+
         const requestId = ++latestLoadRequestRef.current
 
         try {
@@ -36,7 +134,8 @@ export function QueueTab() {
 
             if (
                 !isMountedRef.current ||
-                requestId !== latestLoadRequestRef.current
+                requestId !== latestLoadRequestRef.current ||
+                isDraggingRef.current
             ) {
                 return
             }
@@ -98,48 +197,24 @@ export function QueueTab() {
         }
     }
 
-    const handleDragStart = (event: React.DragEvent, index: number) => {
-        event.dataTransfer.effectAllowed = 'move'
-        event.dataTransfer.setData('text/plain', String(index))
-        setDraggedIndex(index)
+    const handleDragStart = (event: DragStartEvent) => {
+        setActiveId(event.active.id as string)
+        isDraggingRef.current = true
     }
 
-    const handleDragEnter = (e: React.DragEvent, index: number) => {
-        e.preventDefault()
-        if (draggedIndex === null || draggedIndex === index) return
-        setDragOverIndex(index)
-    }
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event
+        setActiveId(null)
+        isDraggingRef.current = false
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault()
-    }
+        if (!over || active.id === over.id) return
 
-    const handleDragLeave = () => {
-        setDragOverIndex(null)
-    }
+        const oldIndex = queue.findIndex((t) => t.id === active.id)
+        const newIndex = queue.findIndex((t) => t.id === over.id)
+        if (oldIndex === -1 || newIndex === -1) return
 
-    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-        e.preventDefault()
-        if (draggedIndex === null || draggedIndex === dropIndex) {
-            setDraggedIndex(null)
-            setDragOverIndex(null)
-            return
-        }
-
-        const newQueue = [...queue]
-        const draggedItem = newQueue[draggedIndex]
-        if (!draggedItem) {
-            setDraggedIndex(null)
-            setDragOverIndex(null)
-            return
-        }
-
-        newQueue.splice(draggedIndex, 1)
-        newQueue.splice(dropIndex, 0, draggedItem)
-
+        const newQueue = arrayMove(queue, oldIndex, newIndex)
         setQueue(newQueue)
-        setDraggedIndex(null)
-        setDragOverIndex(null)
 
         reorderQueue(newQueue).catch((error) => {
             console.error('Failed to reorder queue:', error)
@@ -147,10 +222,15 @@ export function QueueTab() {
         })
     }
 
-    const handleDragEnd = () => {
-        setDraggedIndex(null)
-        setDragOverIndex(null)
+    const handleDragCancel = () => {
+        setActiveId(null)
+        isDraggingRef.current = false
     }
+
+    const activeTrack = activeId ? queue.find((t) => t.id === activeId) : null
+    const activeIndex = activeId
+        ? queue.findIndex((t) => t.id === activeId)
+        : -1
 
     return (
         <div className="flex flex-col h-full bg-background">
@@ -201,45 +281,44 @@ export function QueueTab() {
                         </p>
                     </div>
                 ) : (
-                    <div className="py-2">
-                        {queue.map((track, index) => (
-                            <div
-                                key={track.id}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, index)}
-                                onDragEnter={(e) => handleDragEnter(e, index)}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={(e) => handleDrop(e, index)}
-                                onDragEnd={handleDragEnd}
-                                className={`group flex items-center gap-1 transition-all duration-200 ${
-                                    draggedIndex === index
-                                        ? 'opacity-30 scale-95'
-                                        : 'opacity-100'
-                                } ${
-                                    dragOverIndex === index &&
-                                    draggedIndex !== index
-                                        ? 'border-t-2 border-[var(--macos-blue)] pt-2'
-                                        : ''
-                                }`}
-                            >
-                                <div className="pl-1 cursor-grab active:cursor-grabbing">
-                                    <GripVertical className="w-4 h-4 text-muted-foreground" />
-                                </div>
-
-                                <div className="flex-1 min-w-0 overflow-hidden">
-                                    <TrackItem
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        onDragCancel={handleDragCancel}
+                    >
+                        <SortableContext
+                            items={queue.map((t) => t.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <div className="py-2">
+                                {queue.map((track, index) => (
+                                    <SortableTrackRow
+                                        key={track.id}
                                         track={track}
-                                        context="queue"
-                                        queueIndex={index}
+                                        index={index}
                                         onRemove={() =>
                                             handleRemoveFromQueue(index)
                                         }
                                     />
-                                </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </SortableContext>
+                        <DragOverlay
+                            dropAnimation={{
+                                duration: 200,
+                                easing: 'cubic-bezier(0.25, 1, 0.5, 1)'
+                            }}
+                        >
+                            {activeTrack ? (
+                                <DragOverlayRow
+                                    track={activeTrack}
+                                    index={activeIndex}
+                                />
+                            ) : null}
+                        </DragOverlay>
+                    </DndContext>
                 )}
             </div>
         </div>

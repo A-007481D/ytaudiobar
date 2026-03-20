@@ -261,20 +261,12 @@ export function TrackItem({
     return (
         <>
             <div
-                className={`flex items-center gap-3 px-3 py-2 hover-macos-button cursor-pointer transition-colors ${
-                    isCurrentTrack ? 'bg-[var(--macos-blue)]/10' : ''
-                }`}
+                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+                    context !== 'queue' ? 'hover-macos-button' : ''
+                } ${isCurrentTrack ? 'bg-[var(--macos-blue)]/10' : ''}`}
                 onClick={handlePlay}
                 onContextMenu={handleContextMenu}
             >
-                {context === 'queue' && queueIndex !== undefined && (
-                    <div className="w-6 flex-shrink-0 text-center">
-                        <span className="text-[12px] text-muted-foreground">
-                            {queueIndex + 1}
-                        </span>
-                    </div>
-                )}
-
                 <div className="w-12 h-12 rounded flex-shrink-0 bg-secondary overflow-hidden">
                     {videoInfo.thumbnail_url ? (
                         <img
