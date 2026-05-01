@@ -21,7 +21,7 @@ prepare() {
 build() {
   cd "$srcdir/ytaudiobar"
   # Build the tauri app (only the binary, we'll package it manually)
-  npm run tauri build -- --bundles none
+  npm run tauri build
 }
 
 package() {
