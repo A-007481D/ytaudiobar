@@ -27,5 +27,5 @@ modules:
       - install -Dm755 src-tauri/target/release/ytaudiobar /app/bin/ytaudiobar
     sources:
       - type: git
-        url: https://github.com/ilyassan/ytaudiobar.git
+        url: https://github.com/A-007481D/ytaudiobar.git
         branch: main
