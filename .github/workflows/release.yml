@@ -141,6 +141,8 @@ jobs:
                       src-tauri/target/release/bundle/appimage/*.AppImage
                       src-tauri/target/release/bundle/appimage/*.tar.gz
                       src-tauri/target/release/bundle/appimage/*.tar.gz.sig
+                      src-tauri/target/release/bundle/deb/*.deb
+                      src-tauri/target/release/bundle/rpm/*.rpm
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
