@@ -10,7 +10,7 @@ depends=('webkit2gtk-4.1' 'openssl' 'libappindicator-gtk3' 'librsvg' 'ffmpeg')
 makedepends=('git' 'nodejs' 'npm' 'rust' 'cargo')
 provides=('ytaudiobar')
 conflicts=('ytaudiobar')
-source=("ytaudiobar::git+https://github.com/A-007481D/ytaudiobar.git")
+source=("git+https://github.com/ilyassan/ytaudiobar.git")
 sha256sums=('SKIP')
 
 prepare() {
